@@ -88,8 +88,12 @@ def test_response_correlation_requires_expected_mti_stan_and_rrn() -> None:
 
     assert correlation_key(request) == NetworkCorrelation(stan="123456", rrn="ABC123456789")
     assert correlates_response(request, response)
-    assert not correlates_response(request, ISO8583Message("0210", {11: "654321", 37: "ABC123456789"}))
-    assert not correlates_response(request, ISO8583Message("0200", {11: "123456", 37: "ABC123456789"}))
+    assert not correlates_response(
+        request, ISO8583Message("0210", {11: "654321", 37: "ABC123456789"})
+    )
+    assert not correlates_response(
+        request, ISO8583Message("0200", {11: "123456", 37: "ABC123456789"})
+    )
 
 
 def test_canonical_to_iso8583_enforces_network_field_widths() -> None:
