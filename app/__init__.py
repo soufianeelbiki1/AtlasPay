@@ -1,0 +1,1 @@
+"""AtlasPay application package."""
