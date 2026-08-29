@@ -77,9 +77,7 @@ def authorization_to_iso8583(request: AuthorizationRequest) -> ISO8583Message:
     try:
         currency_numeric = ALPHA_TO_NUMERIC_CURRENCY[request.currency]
     except KeyError as exc:
-        raise ISO8583MappingError(
-            f"Unsupported canonical currency {request.currency}"
-        ) from exc
+        raise ISO8583MappingError(f"Unsupported canonical currency {request.currency}") from exc
 
     if request.amount_minor > 999_999_999_999:
         raise ISO8583MappingError("amount_minor exceeds the 12-digit DE4 profile")
