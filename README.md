@@ -144,3 +144,28 @@ AtlasPay is meant to make engineering skills visible to recruiters and research/
 ## License
 
 MIT
+
+## Portfolio continuity contract
+
+This repository is the payments and distributed-systems flagship in the soufianeelbiki1 portfolio. Future work must begin by inspecting the latest repository state and CI, then fixing regressions before adding capability.
+
+### Build sequence
+
+1. Strict ISO 8583 MTI, primary/secondary bitmap, fixed/LLVAR/LLLVAR field codecs with validation and property-based round-trip tests.
+2. STAN/RRN correlation, issuer/acquirer routing, timeout and late-response handling, duplicate detection, and reversals.
+3. DE55 BER-TLV parsing, EMV tag dictionaries, TVR decoding, and a canonical internal payment model.
+4. ISO 8583 ↔ canonical model ↔ ISO 20022 mappings with documented lossy fields and explicit failure semantics.
+5. Durable idempotency, PostgreSQL constraints, double-entry ledger, transactional outbox, and replay/rebuild.
+6. Kafka/event streaming, at-least-once delivery with idempotent consumers, reconciliation, settlement hooks, observability, security, fault injection, and load tests.
+
+Nexus is the later operator/control-plane UI and should consume real AtlasPay operational data. Do not claim exactly-once behavior across external boundaries; document the actual guarantees and failure boundaries. Avoid fake scale claims, toy abstractions, and unnecessary microservices. Record consequential choices as ADRs.
+
+### Portfolio map
+
+- AtlasPay: https://github.com/soufianeelbiki1/AtlasPay
+- AtlasRAG: https://github.com/soufianeelbiki1/AtlasRAG
+- ForecastLab: https://github.com/soufianeelbiki1/ForecastLab
+- Nexus: https://github.com/soufianeelbiki1/Nexus
+- Portfolio: https://github.com/soufianeelbiki1/portfolio
+
+Status snapshot (2026-08-29): AtlasPay is the main working codebase; AtlasRAG has architecture documentation; the remaining repositories are being built out. No deployment is claimed until a live URL is verified.
