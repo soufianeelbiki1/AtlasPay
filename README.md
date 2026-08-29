@@ -22,6 +22,7 @@ AtlasPay is designed around those problems rather than around a simple CRUD demo
 - Decimal-safe money representation using integer minor units
 - Domain validation with Pydantic
 - Unit tests for payment creation and idempotency
+- Strict ISO 8583 message codec with primary/secondary bitmaps, LLVAR/LLLVAR validation, and binary DE55 support
 - Docker-ready application
 
 ## Architecture
@@ -40,9 +41,20 @@ Payment repository
   |
   v
 Domain models
+
+ISO 8583 transport adapters use the explicit codec profile at the network boundary.
 ```
 
 The first version intentionally uses an in-memory repository so the domain behavior stays easy to understand and test. The roadmap evolves it toward PostgreSQL, an immutable ledger, asynchronous events, webhooks, observability, and provider adapters.
+
+The ISO 8583 codec currently covers the message body only: ASCII MTI, binary
+primary/secondary bitmaps, and ASCII LLVAR/LLLVAR length prefixes. Network
+headers, TPDU framing, packed BCD variants, and network-specific field
+profiles belong in explicit adapters. Unknown fields and malformed values are
+rejected rather than guessed.
+
+Delivery guarantees and failure boundaries are documented in
+[`docs/adr/0001-delivery-semantics.md`](docs/adr/0001-delivery-semantics.md).
 
 ## API example
 
@@ -104,6 +116,7 @@ docker run -p 8000:8000 atlaspay
 - [x] Payment domain model and REST API
 - [x] Idempotent payment creation
 - [x] Unit tests
+- [x] Strict ISO 8583 MTI/bitmap/field codec and property-based round-trip tests
 - [ ] PostgreSQL persistence with migrations
 - [ ] Double-entry ledger
 - [ ] Payment state-machine enforcement
@@ -112,7 +125,7 @@ docker run -p 8000:8000 atlaspay
 - [ ] Signed webhook delivery with retries
 - [ ] Redis-backed rate limiting / idempotency cache
 - [ ] OpenTelemetry traces and Prometheus metrics
-- [ ] CI with GitHub Actions
+- [x] CI with GitHub Actions
 - [ ] Load tests and failure-injection tests
 - [ ] Architecture decision records (ADRs)
 
