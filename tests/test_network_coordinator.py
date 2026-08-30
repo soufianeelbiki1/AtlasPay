@@ -15,11 +15,9 @@ def response(*, mti: str = "0210", stan: str = "123456", rrn: str = "ABC12345678
 def test_timeout_then_late_response_is_explicit() -> None:
     coordinator = NetworkTransactionCoordinator()
     req = request()
-    coordinator.register(req, now=10.0, timeout=5.0)
+    key = coordinator.register(req, now=10.0, timeout=5.0)
 
-    assert coordinator.expire(now=15.0) == (
-        coordinator.register if False else next(iter(coordinator._timed_out)),
-    )
+    assert coordinator.expire(now=15.0) == (key,)
     assert coordinator.handle_response(req, response(), now=16.0) is TransactionDisposition.LATE
 
 
