@@ -111,7 +111,7 @@ def test_report_order_is_deterministic() -> None:
 
 def test_replay_controller_resets_only_unpublished_events() -> None:
     assert DATABASE_URL is not None
-    payment_id, operation_id = create_operation()
+    _, operation_id = create_operation()
     outbox = PostgresOutbox(DATABASE_URL)
 
     with psycopg.connect(DATABASE_URL) as conn, conn.cursor() as cursor:
