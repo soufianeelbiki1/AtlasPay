@@ -71,17 +71,13 @@ def test_iso20022_subset_round_trips_through_canonical_with_allocated_stan() -> 
 
 
 def test_iso8583_to_canonical_to_iso20022_documents_de55_loss() -> None:
-    source = authorization_to_iso8583(
-        canonical(icc_data=bytes.fromhex("9F0206000000012900"))
-    )
+    source = authorization_to_iso8583(canonical(icc_data=bytes.fromhex("9F0206000000012900")))
     mapped = authorization_from_iso8583(source)
     projection = authorization_to_iso20022(mapped, message_id="bridge-001")
 
     assert projection.authorization.amount_minor == mapped.amount_minor
     assert projection.authorization.currency == mapped.currency
-    assert MappingLossCode.ICC_DATA_NOT_PROJECTED in {
-        loss.code for loss in projection.losses
-    }
+    assert MappingLossCode.ICC_DATA_NOT_PROJECTED in {loss.code for loss in projection.losses}
 
 
 def test_iso20022_to_canonical_to_iso8583_requires_iso8583_field_widths() -> None:
