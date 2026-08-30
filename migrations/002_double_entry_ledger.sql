@@ -47,11 +47,11 @@ FOR EACH ROW
 EXECUTE FUNCTION reject_ledger_entry_mutation();
 
 CREATE OR REPLACE FUNCTION reject_ledger_transaction_mutation()
-RETURNS trigger AS $
+RETURNS trigger AS $$
 BEGIN
     RAISE EXCEPTION 'posted ledger transactions are immutable';
 END;
-$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql;
 
 CREATE TRIGGER ledger_transactions_immutable
 BEFORE UPDATE OR DELETE ON ledger_transactions
@@ -59,7 +59,7 @@ FOR EACH ROW
 EXECUTE FUNCTION reject_ledger_transaction_mutation();
 
 CREATE OR REPLACE FUNCTION assert_ledger_transaction_balanced()
-RETURNS trigger AS $
+RETURNS trigger AS $$
 DECLARE
     entry_count BIGINT;
     debit_total BIGINT;
@@ -87,7 +87,7 @@ BEGIN
 
     RETURN NULL;
 END;
-$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql;
 
 CREATE CONSTRAINT TRIGGER ledger_transaction_balanced
 AFTER INSERT ON ledger_transactions
