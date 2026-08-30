@@ -104,13 +104,17 @@ def test_postgres_reader_marks_plain_unpublished_backlog_degraded() -> None:
     assert snapshot.incidents == []
 
 
-def test_ops_endpoint_preserves_contract_and_unavailable_sections() -> None:
+def test_ops_endpoint_preserves_contract_and_unavailable_sections(monkeypatch) -> None:
     snapshot = UnavailableOperationalSnapshotReader("test database unavailable").read()
     original = main_module.operational_snapshot_reader
     main_module.operational_snapshot_reader = StaticSnapshotReader(snapshot)
+    monkeypatch.setenv(main_module.OPS_TOKEN_ENV, "ops-test-token")
     client = TestClient(main_module.app)
     try:
-        response = client.get("/v1/ops/snapshot")
+        response = client.get(
+            "/v1/ops/snapshot",
+            headers={"Authorization": "Bearer ops-test-token"},
+        )
     finally:
         main_module.operational_snapshot_reader = original
 
@@ -121,6 +125,30 @@ def test_ops_endpoint_preserves_contract_and_unavailable_sections() -> None:
     assert payload["payments"]["total"] is None
     assert payload["network"]["state"] == "unavailable"
     assert "network" in payload["missing_sections"]
+
+
+def test_ops_endpoint_is_disabled_without_configured_token(monkeypatch) -> None:
+    monkeypatch.delenv(main_module.OPS_TOKEN_ENV, raising=False)
+    response = TestClient(main_module.app).get("/v1/ops/snapshot")
+
+    assert response.status_code == 503
+    assert "disabled" in response.json()["detail"].lower()
+
+
+def test_ops_endpoint_rejects_missing_and_invalid_bearer_credentials(monkeypatch) -> None:
+    monkeypatch.setenv(main_module.OPS_TOKEN_ENV, "expected-secret")
+    client = TestClient(main_module.app)
+
+    missing = client.get("/v1/ops/snapshot")
+    invalid = client.get(
+        "/v1/ops/snapshot",
+        headers={"Authorization": "Bearer wrong-secret"},
+    )
+
+    assert missing.status_code == 401
+    assert invalid.status_code == 401
+    assert missing.headers["www-authenticate"] == "Bearer"
+    assert invalid.headers["www-authenticate"] == "Bearer"
 
 
 def test_provenance_timestamp_is_timezone_aware() -> None:
