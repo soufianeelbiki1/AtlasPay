@@ -9,6 +9,8 @@ class PaymentStatus(StrEnum):
     PENDING = "pending"
     AUTHORIZED = "authorized"
     CAPTURED = "captured"
+    REFUNDED = "refunded"
+    REVERSED = "reversed"
     FAILED = "failed"
     CANCELLED = "cancelled"
 
