@@ -56,9 +56,7 @@ class NetworkRouter:
             )
 
         longest_prefix = max(len(route.pan_prefix) for route in matches)
-        most_specific = [
-            route for route in matches if len(route.pan_prefix) == longest_prefix
-        ]
+        most_specific = [route for route in matches if len(route.pan_prefix) == longest_prefix]
         if len(most_specific) != 1:
             names = ", ".join(sorted(route.name for route in most_specific))
             raise NetworkRoutingError(f"ambiguous issuer routing between: {names}")
