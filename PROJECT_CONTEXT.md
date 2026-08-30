@@ -28,6 +28,7 @@ As of 2026-08-30, the repository already contains:
 - One-to-one original/reversal network correlation linkage with explicit reasons and no external-delivery claim.
 - Strict EMV BER-TLV decoding for DE55 with constructed-template recursion, duplicate preservation, bounded nesting/length parsing, known-tag metadata, and explainable five-byte TVR decoding.
 - Explicit byte-oriented network transport port plus ISO 8583 adapter boundary; transport timeouts preserve ambiguous external-delivery status, while malformed responses fail at the adapter boundary.
+- Authorization network flow now ties canonical/wire correlation equality, issuer routing, coordinator deadlines, transport outcomes, timeout-triggered reversal correlation, late original responses, and safe cancellation after known-local transport failure without claiming reversal delivery.
 - Unit/property-oriented tests, PostgreSQL concurrency/integration tests, and GitHub Actions CI.
 - ADR documentation for delivery semantics, ledger invariants, transactional outbox guarantees, and failure boundaries.
 
@@ -109,4 +110,4 @@ At the start of each pass:
 
 ## Next highest-value task
 
-Integrate issuer timeout/reversal flows across routing, transport, and the coordinator, including explicit late-response behavior after a timeout-triggered reversal. Keep ISO 8583 framing, EMV interpretation, transport delivery, routing, and business lifecycle responsibilities separate.
+Advance interoperability through ISO 8583 -> canonical -> ISO 20022 mappings with explicit lossy-field documentation and rejection behavior, then add observability/fault-injection around the network lifecycle. Keep protocol mapping separate from transport and accounting semantics.

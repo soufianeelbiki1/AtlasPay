@@ -45,6 +45,18 @@ class NetworkTransactionCoordinator:
         self._pending[key] = PendingTransaction(key, now + timeout)
         return key
 
+    def cancel(self, request: ISO8583Message) -> bool:
+        """Remove a pending request after a known-local pre-response failure.
+
+        Cancellation is intentionally allowed only while the request is pending.
+        It does not mark the correlation completed or timed out, so a caller may
+        retry the same network correlation only when external delivery is known
+        not to have occurred.
+        """
+
+        key = correlation_key(request)
+        return self._pending.pop(key, None) is not None
+
     def expire(self, *, now: float) -> tuple[NetworkCorrelation, ...]:
         expired = tuple(
             sorted(key for key, transaction in self._pending.items() if transaction.deadline <= now)
