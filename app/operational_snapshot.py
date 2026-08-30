@@ -128,8 +128,13 @@ class PostgresOperationalSnapshotReader:
                         WHERE published_at IS NULL AND attempts >= %s
                     ),
                     COALESCE(
-                        EXTRACT(EPOCH FROM (NOW() - MIN(created_at)))
-                            FILTER (WHERE published_at IS NULL),
+                        EXTRACT(
+                            EPOCH FROM (
+                                NOW() - (
+                                    MIN(created_at) FILTER (WHERE published_at IS NULL)
+                                )
+                            )
+                        ),
                         0
                     )
                 FROM outbox_events
