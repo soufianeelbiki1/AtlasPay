@@ -18,10 +18,13 @@ As of 2026-08-30, the repository already contains:
 - Append-only PostgreSQL double-entry ledger with balanced/currency invariants.
 - Atomic PostgreSQL capture/refund/reversal operations that update payment state and post a ledger journal in the same transaction.
 - Replay-safe operation idempotency using request fingerprints, a durable unique key, and a PostgreSQL advisory transaction lock.
+- Transactional outbox events committed with payment state, ledger journal, and operation record.
+- Database-backed at-least-once publisher reference using `FOR UPDATE SKIP LOCKED`, bounded retry accounting, and poison-message retention.
+- Idempotent consumer claims keyed by `(consumer_name, event_id)`.
 - Unit/property-oriented tests, PostgreSQL concurrency/integration tests, and GitHub Actions CI.
-- ADR documentation for delivery semantics, ledger invariants, and failure boundaries.
+- ADR documentation for delivery semantics, ledger invariants, transactional outbox guarantees, and failure boundaries.
 
-PostgreSQL payment/idempotency persistence is implemented. The in-memory adapter remains for isolated use. Schema ownership is explicit: migrations run separately from repository construction, are serialized with a PostgreSQL advisory lock, and reject checksum drift for already-applied versions. Payment operation atomicity currently covers database-local state and ledger mutation only; no exactly-once guarantee is claimed across external systems. No production deployment or live payment-network integration should be claimed unless independently verified.
+PostgreSQL payment/idempotency persistence is implemented. The in-memory adapter remains for isolated use. Schema ownership is explicit: migrations run separately from repository construction, are serialized with a PostgreSQL advisory lock, and reject checksum drift for already-applied versions. Payment operation atomicity covers database-local state, ledger mutation, operation record, and outbox persistence. External publication remains explicitly at-least-once: a crash after broker publication but before `published_at` commits can cause redelivery, so consumers must deduplicate or be idempotent. No production deployment or live payment-network integration should be claimed unless independently verified.
 
 ## Engineering invariants
 
@@ -54,10 +57,10 @@ PostgreSQL payment/idempotency persistence is implemented. The in-memory adapter
 
 ### 3. Transactional outbox and event delivery
 
-- Persist domain events in the same database transaction as state changes.
-- Add an outbox publisher and idempotent consumer examples.
-- Document at-least-once semantics, retry behavior, poison-message handling, and replay.
-- Add reconciliation/rebuild tooling before introducing broader Kafka topology.
+- [x] Persist domain events in the same database transaction as state changes.
+- [x] Add an outbox publisher and idempotent consumer examples.
+- [x] Document at-least-once semantics, retry behavior, poison-message handling, and replay.
+- [ ] Add reconciliation/rebuild tooling before introducing broader Kafka topology.
 
 ### 4. Payment-network behavior
 
@@ -98,4 +101,4 @@ At the start of each pass:
 
 ## Next highest-value task
 
-Add a transactional outbox so capture/refund/reversal domain events are persisted in the same PostgreSQL transaction as the payment state and ledger journal. Then add a replay-safe publisher/consumer example with explicit at-least-once semantics and poison-message handling.
+Add reconciliation/rebuild tooling over payments, payment operations, ledger journals, and outbox state. Produce deterministic discrepancy reports and replay controls before adding Kafka-specific topology or broader distributed deployment claims.
