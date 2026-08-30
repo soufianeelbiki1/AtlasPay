@@ -20,7 +20,7 @@ def test_de55_parses_known_and_unknown_tags_without_guessing() -> None:
 
 
 def test_constructed_templates_are_parsed_recursively() -> None:
-    payload = bytes.fromhex("77119F02060000000125009F3602002A")
+    payload = bytes.fromhex("770E9F02060000000125009F3602002A")
 
     (template,) = parse_ber_tlv(payload)
 
