@@ -3,6 +3,12 @@ import os
 from fastapi import FastAPI, Header, HTTPException, status
 
 from app.models import CreatePaymentRequest, Payment
+from app.operational_snapshot import (
+    OperationalSnapshot,
+    OperationalSnapshotReader,
+    PostgresOperationalSnapshotReader,
+    UnavailableOperationalSnapshotReader,
+)
 from app.repository import InMemoryPaymentRepository, PaymentRepository, PostgresPaymentRepository
 from app.service import IdempotencyConflictError, PaymentService
 
@@ -20,13 +26,34 @@ def build_repository() -> PaymentRepository:
     return InMemoryPaymentRepository()
 
 
+def build_operational_snapshot_reader() -> OperationalSnapshotReader:
+    database_url = os.getenv("DATABASE_URL")
+    if database_url:
+        return PostgresOperationalSnapshotReader(database_url)
+    return UnavailableOperationalSnapshotReader(
+        "DATABASE_URL is not configured; durable operational sections cannot be measured"
+    )
+
+
 repository = build_repository()
 service = PaymentService(repository)
+operational_snapshot_reader = build_operational_snapshot_reader()
 
 
 @app.get("/health", tags=["system"])
 def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.get(
+    "/v1/ops/snapshot",
+    response_model=OperationalSnapshot,
+    tags=["operations"],
+)
+def get_operational_snapshot() -> OperationalSnapshot:
+    """Return versioned read-only operator state without fabricating unavailable metrics."""
+
+    return operational_snapshot_reader.read()
 
 
 @app.post(
