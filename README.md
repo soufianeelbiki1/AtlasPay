@@ -122,7 +122,7 @@ docker run -p 8000:8000 atlaspay
 - [x] Unit tests
 - [x] Strict ISO 8583 MTI/bitmap/field codec and property-based round-trip tests
 - [x] PostgreSQL persistence with versioned migrations and durable idempotency
-- [ ] Double-entry ledger
+- [x] Append-only PostgreSQL double-entry ledger foundation
 - [ ] Payment state-machine enforcement
 - [ ] Provider adapter interface and sandbox provider
 - [ ] Transactional outbox + asynchronous event processing
