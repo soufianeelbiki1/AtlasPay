@@ -101,7 +101,7 @@ def test_transport_exchange_invariants_reject_impossible_states() -> None:
         TransportExchange(TransportOutcome.RESPONSE)
     with pytest.raises(ValueError, match="ambiguous external delivery"):
         TransportExchange(TransportOutcome.TIMEOUT)
-    with pytest.raises(ValueError, match="cannot claim ambiguous delivery"):
+    with pytest.raises(ValueError, match="must not claim ambiguous delivery"):
         TransportExchange(TransportOutcome.FAILURE, delivery_unknown=True)
 
 
