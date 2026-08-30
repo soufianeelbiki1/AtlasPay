@@ -13,9 +13,7 @@ class MigrationDriftError(RuntimeError):
 
 def migration_files() -> list[Path]:
     return sorted(
-        path
-        for path in MIGRATIONS_DIR.glob("*.sql")
-        if path.is_file() and path.name[:3].isdigit()
+        path for path in MIGRATIONS_DIR.glob("*.sql") if path.is_file() and path.name[:3].isdigit()
     )
 
 
