@@ -18,10 +18,10 @@ AtlasPay is designed around those problems rather than around a simple CRUD demo
 - Create payment intents
 - Retrieve payment state
 - Explicit payment lifecycle (`pending`, `authorized`, `captured`, `failed`, `cancelled`)
-- Idempotency-key support at the service layer
+- Durable PostgreSQL idempotency with request fingerprinting and database uniqueness constraints
 - Decimal-safe money representation using integer minor units
 - Domain validation with Pydantic
-- Unit tests for payment creation and idempotency
+- Unit, property-based, PostgreSQL persistence, concurrency, and migration tests
 - Strict ISO 8583 message codec with primary/secondary bitmaps, LLVAR/LLLVAR validation, and binary DE55 support
 - Docker-ready application
 
@@ -34,10 +34,12 @@ Client
 FastAPI routes
   |
   v
-Payment service  ----> Idempotency registry
+Payment service
   |
   v
-Payment repository
+Repository boundary
+  |
+  +----> PostgreSQL payments + durable idempotency
   |
   v
 Domain models
@@ -45,7 +47,7 @@ Domain models
 ISO 8583 transport adapters use the explicit codec profile at the network boundary.
 ```
 
-The first version intentionally uses an in-memory repository so the domain behavior stays easy to understand and test. The roadmap evolves it toward PostgreSQL, an immutable ledger, asynchronous events, webhooks, observability, and provider adapters.
+AtlasPay now has a PostgreSQL adapter for durable payment/idempotency persistence. The in-memory adapter remains for isolated tests and local experimentation. Database schema changes are applied through ordered SQL migrations (`python -m app.migrations`); repository construction never mutates schema.
 
 The ISO 8583 codec currently covers the message body only: ASCII MTI, binary
 primary/secondary bitmaps, and ASCII LLVAR/LLLVAR length prefixes. Network
@@ -93,6 +95,8 @@ cd AtlasPay
 python -m venv .venv
 source .venv/bin/activate  # Windows: .venv\\Scripts\\activate
 pip install -e ".[dev]"
+export DATABASE_URL=postgresql://atlaspay:atlaspay@localhost:5432/atlaspay
+python -m app.migrations
 uvicorn app.main:app --reload
 ```
 
@@ -117,7 +121,7 @@ docker run -p 8000:8000 atlaspay
 - [x] Idempotent payment creation
 - [x] Unit tests
 - [x] Strict ISO 8583 MTI/bitmap/field codec and property-based round-trip tests
-- [ ] PostgreSQL persistence with migrations
+- [x] PostgreSQL persistence with versioned migrations and durable idempotency
 - [ ] Double-entry ledger
 - [ ] Payment state-machine enforcement
 - [ ] Provider adapter interface and sandbox provider
@@ -168,4 +172,4 @@ Nexus is the later operator/control-plane UI and should consume real AtlasPay op
 - Nexus: https://github.com/soufianeelbiki1/Nexus
 - Portfolio: https://github.com/soufianeelbiki1/portfolio
 
-Status snapshot (2026-08-29): AtlasPay is the main working codebase; AtlasRAG has architecture documentation; the remaining repositories are being built out. No deployment is claimed until a live URL is verified.
+Status snapshot (2026-08-30): AtlasPay has strict ISO 8583 codecs plus durable PostgreSQL payment/idempotency persistence and explicit versioned migrations. No production deployment or live payment-network integration is claimed until independently verified.

@@ -4,6 +4,7 @@ from uuid import uuid4
 
 import pytest
 
+from app.migrations import migrate_database
 from app.models import CreatePaymentRequest
 from app.repository import IdempotencyConflictError, PostgresPaymentRepository
 
@@ -11,9 +12,20 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 pytestmark = pytest.mark.skipif(not DATABASE_URL, reason="DATABASE_URL is required")
 
 
+@pytest.fixture(scope="module", autouse=True)
+def migrated_database() -> None:
+    assert DATABASE_URL is not None
+    migrate_database(DATABASE_URL)
+
+
 def repository() -> PostgresPaymentRepository:
     assert DATABASE_URL is not None
     return PostgresPaymentRepository(DATABASE_URL)
+
+
+def test_migrations_are_idempotent() -> None:
+    assert DATABASE_URL is not None
+    assert migrate_database(DATABASE_URL) == []
 
 
 def test_idempotency_survives_repository_instances() -> None:

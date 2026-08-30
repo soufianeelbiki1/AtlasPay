@@ -69,40 +69,13 @@ class PostgresPaymentRepository:
     candidates are deleted in the same transaction before the existing payment is returned.
     """
 
-    def __init__(self, dsn: str, *, initialize_schema: bool = True) -> None:
+    def __init__(self, dsn: str) -> None:
         self._dsn = dsn
-        if initialize_schema:
-            self.ensure_schema()
 
     def _connect(self):
         import psycopg
 
         return psycopg.connect(self._dsn)
-
-    def ensure_schema(self) -> None:
-        with self._connect() as conn, conn.cursor() as cursor:
-            cursor.execute(
-                """
-                CREATE TABLE IF NOT EXISTS payments (
-                    id TEXT PRIMARY KEY,
-                    amount BIGINT NOT NULL CHECK (amount > 0),
-                    currency CHAR(3) NOT NULL,
-                    merchant_reference VARCHAR(128) NOT NULL,
-                    status TEXT NOT NULL,
-                    created_at TIMESTAMPTZ NOT NULL
-                )
-                """
-            )
-            cursor.execute(
-                """
-                CREATE TABLE IF NOT EXISTS idempotency_keys (
-                    key TEXT PRIMARY KEY,
-                    request_fingerprint CHAR(64) NOT NULL,
-                    payment_id TEXT NOT NULL REFERENCES payments(id),
-                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-                )
-                """
-            )
 
     @staticmethod
     def _row_to_payment(row: tuple[object, ...] | None) -> Payment | None:

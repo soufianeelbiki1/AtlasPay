@@ -9,15 +9,16 @@ AtlasPay is the flagship payments and distributed-systems project in the `soufia
 As of 2026-08-30, the repository already contains:
 
 - FastAPI payment-intent API and explicit payment lifecycle.
-- Service-layer idempotency behavior.
+- Durable PostgreSQL idempotency with request fingerprinting and a unique database key.
 - Decimal-safe money modeling using integer minor units.
 - Strict ISO 8583 codec support with primary/secondary bitmaps, fixed/LLVAR/LLLVAR validation, and binary DE55 handling.
 - Protocol-independent canonical authorization models.
 - ISO 8583 mapping plus MTI/STAN/RRN correlation groundwork.
-- Unit/property-oriented tests and GitHub Actions CI.
+- Versioned SQL migrations with checksum drift detection and a PostgreSQL advisory migration lock.
+- Unit/property-oriented tests, PostgreSQL concurrency tests, and GitHub Actions CI.
 - ADR documentation for delivery semantics and failure boundaries.
 
-The persistence layer is still intentionally in-memory. No production deployment or live payment-network integration should be claimed unless independently verified.
+PostgreSQL payment/idempotency persistence is implemented. The in-memory adapter remains for isolated use. Schema ownership is explicit: migrations run separately from repository construction, are serialized with a PostgreSQL advisory lock, and reject checksum drift for already-applied versions. No production deployment or live payment-network integration should be claimed unless independently verified.
 
 ## Engineering invariants
 
@@ -34,10 +35,11 @@ The persistence layer is still intentionally in-memory. No production deployment
 
 ### 1. Durable persistence and idempotency
 
-- Introduce PostgreSQL persistence and migrations.
-- Add durable idempotency records with unique constraints and request fingerprinting.
-- Enforce payment state transitions in the domain and database-facing service layer.
-- Add concurrency tests for duplicate/replayed requests.
+- [x] Introduce PostgreSQL payment persistence.
+- [x] Add explicit versioned migrations with drift detection and deployment serialization.
+- [x] Add durable idempotency records with unique constraints and request fingerprinting.
+- [x] Add cross-worker concurrency tests for duplicate/replayed requests.
+- [ ] Enforce payment state transitions in the domain and database-facing service layer.
 
 ### 2. Double-entry ledger
 
@@ -92,4 +94,4 @@ At the start of each pass:
 
 ## Next highest-value task
 
-Implement PostgreSQL-backed durable payment/idempotency persistence with migrations and concurrency-focused tests. This is the prerequisite for making later ledger, outbox, replay, and reconciliation guarantees credible.
+Implement the append-only double-entry ledger on PostgreSQL: accounts, journal transactions, debit/credit entries, balanced-transaction and currency invariants, plus transactional/property tests. Keep postings atomic with the business operation that creates them.
