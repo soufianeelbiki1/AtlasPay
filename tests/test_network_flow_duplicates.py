@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 
 from app.canonical import AuthorizationRequest, CardPaymentInstrument, NetworkCorrelation
-from app.iso8583 import ISO8583Codec, ISO8583Message
+from app.iso8583 import ISO8583Message
 from app.network_coordinator import NetworkTransactionCoordinator, TransactionDisposition
 from app.network_flow import AuthorizationNetworkFlow
 from app.network_routing import IssuerRoute, NetworkRouter, ReversalRegistry
