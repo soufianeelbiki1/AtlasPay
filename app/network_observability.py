@@ -5,10 +5,10 @@ identifiers from metric labels. Those values are high-cardinality and may be sen
 The OpenTelemetry API remains exporter-neutral; deployments choose an SDK/exporter.
 """
 
+from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from time import perf_counter
-from typing import Iterator
 
 from opentelemetry import trace
 from opentelemetry.trace import Span, Tracer
@@ -17,17 +17,6 @@ from prometheus_client import CollectorRegistry, Counter, Histogram
 from app.network_coordinator import TransactionDisposition
 from app.network_routing import IssuerRoute, ReversalReason
 from app.network_transport import TransportOutcome
-
-
-@dataclass(frozen=True, slots=True)
-class NetworkObservation:
-    route_name: str
-    issuer_id: str
-    transport_outcome: TransportOutcome
-    disposition: TransactionDisposition | None
-    elapsed_seconds: float
-    delivery_unknown: bool
-    reversal_reason: ReversalReason | None = None
 
 
 @dataclass(slots=True)
