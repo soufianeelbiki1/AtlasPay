@@ -107,7 +107,9 @@ class AuthorizationNetworkFlow:
         if result.outcome is TransportOutcome.FAILURE:
             cancelled = self._coordinator.cancel(attempt.request)
             if not cancelled:
-                raise ValueError("local transport failure occurred after attempt left pending state")
+                raise ValueError(
+                    "local transport failure occurred after attempt left pending state"
+                )
             return NetworkFlowResult(
                 route=attempt.route,
                 transport_outcome=TransportOutcome.FAILURE,
