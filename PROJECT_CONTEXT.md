@@ -43,10 +43,11 @@ PostgreSQL payment/idempotency persistence is implemented. The in-memory adapter
 
 ### 2. Double-entry ledger
 
-- Add accounts, journal transactions, and immutable debit/credit entries.
-- Enforce balanced transactions and currency consistency.
-- Make capture/refund/reversal flows post ledger entries atomically with business state.
-- Add property/invariant tests for ledger balancing and replay safety.
+- [x] Add accounts, journal transactions, and immutable debit/credit entries.
+- [x] Enforce balanced transactions and currency consistency in PostgreSQL.
+- [x] Add invariant and property tests for append-only, zero-sum, and currency behavior.
+- [ ] Make capture/refund/reversal flows post ledger entries atomically with business state.
+- [ ] Add replay-safe posting/idempotency semantics for business-operation linkage.
 
 ### 3. Transactional outbox and event delivery
 
@@ -94,4 +95,4 @@ At the start of each pass:
 
 ## Next highest-value task
 
-Implement the append-only double-entry ledger on PostgreSQL: accounts, journal transactions, debit/credit entries, balanced-transaction and currency invariants, plus transactional/property tests. Keep postings atomic with the business operation that creates them.
+Integrate payment capture/refund/reversal state changes with ledger posting inside one PostgreSQL transaction boundary. Add an operation-level idempotency key so replay cannot create duplicate journals.
