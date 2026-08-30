@@ -23,10 +23,13 @@ As of 2026-08-30, the repository already contains:
 - Idempotent consumer claims keyed by `(consumer_name, event_id)`.
 - Deterministic read-only reconciliation across payments, operations, journals, ledger entries, and outbox event linkage.
 - Explicit replay controls that can reset only unpublished outbox events; published delivery history is never silently rewritten.
+- Transport-independent network coordination with explicit accepted, mismatch, timeout, late-response, and duplicate outcomes.
+- Canonical-model issuer/acquirer routing with longest-prefix selection, currency eligibility, and explicit ambiguity rejection.
+- One-to-one original/reversal network correlation linkage with explicit reasons and no external-delivery claim.
 - Unit/property-oriented tests, PostgreSQL concurrency/integration tests, and GitHub Actions CI.
 - ADR documentation for delivery semantics, ledger invariants, transactional outbox guarantees, and failure boundaries.
 
-PostgreSQL payment/idempotency persistence is implemented. The in-memory adapter remains for isolated use. Schema ownership is explicit: migrations run separately from repository construction, are serialized with a PostgreSQL advisory lock, and reject checksum drift for already-applied versions. Payment operation atomicity covers database-local state, ledger mutation, operation record, and outbox persistence. External publication remains explicitly at-least-once: a crash after broker publication but before `published_at` commits can cause redelivery, so consumers must deduplicate or be idempotent. Reconciliation is deliberately observational: discrepancies are reported deterministically and repair actions are explicit, bounded controls rather than automatic accounting mutation. No production deployment or live payment-network integration should be claimed unless independently verified.
+PostgreSQL payment/idempotency persistence is implemented. The in-memory adapter remains for isolated use. Schema ownership is explicit: migrations run separately from repository construction, are serialized with a PostgreSQL advisory lock, and reject checksum drift for already-applied versions. Payment operation atomicity covers database-local state, ledger mutation, operation record, and outbox persistence. External publication remains explicitly at-least-once: a crash after broker publication but before `published_at` commits can cause redelivery, so consumers must deduplicate or be idempotent. Reconciliation is deliberately observational: discrepancies are reported deterministically and repair actions are explicit, bounded controls rather than automatic accounting mutation. Network routing/correlation is transport-independent and does not imply issuer acceptance or successful external delivery. No production deployment or live payment-network integration should be claimed unless independently verified.
 
 ## Engineering invariants
 
@@ -67,9 +70,9 @@ PostgreSQL payment/idempotency persistence is implemented. The in-memory adapter
 ### 4. Payment-network behavior
 
 - [x] Add transport-independent STAN/RRN transaction coordination with explicit timeout, late-response, duplicate, and mismatch outcomes.
-- Continue issuer/acquirer routing, reversal linkage, and network adapter hardening.
-- Add explicit network adapters instead of embedding framing/network behavior in the core ISO 8583 codec.
-- Expand DE55 BER-TLV parsing, EMV tag dictionaries, and TVR decoding.
+- [x] Add issuer/acquirer routing and one-to-one reversal correlation linkage.
+- [ ] Add explicit network adapters instead of embedding framing/network behavior in the core ISO 8583 codec.
+- [ ] Expand DE55 BER-TLV parsing, EMV tag dictionaries, and TVR decoding.
 
 ### 5. Interoperability
 
@@ -104,4 +107,4 @@ At the start of each pass:
 
 ## Next highest-value task
 
-Advance payment-network behavior with issuer/acquirer routing and reversal linkage around the coordinator, then expand DE55 BER-TLV/EMV tag and TVR support. Keep all external delivery and network guarantees explicit.
+Add explicit network adapter boundaries for request send/receive behavior and then expand DE55 BER-TLV parsing, EMV tag dictionaries, and TVR decoding. Keep codec, transport, routing, and business lifecycle responsibilities separate.
