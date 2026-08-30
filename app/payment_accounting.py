@@ -1,28 +1,11 @@
 import hashlib
 import json
-from dataclasses import dataclass
-from enum import StrEnum
 from uuid import uuid4
 
 import psycopg
 
 from app.ledger import LedgerPosting, insert_journal
-from app.models import PaymentStatus
-
-
-class PaymentOperationType(StrEnum):
-    AUTHORIZE = "authorize"
-    CAPTURE = "capture"
-    REFUND = "refund"
-
-
-@dataclass(frozen=True)
-class PaymentOperation:
-    id: str
-    payment_id: str
-    operation_type: PaymentOperationType
-    amount: int
-    journal_id: str | None
+from app.models import PaymentOperation, PaymentOperationType, PaymentStatus
 
 
 class PaymentNotFoundError(LookupError):
