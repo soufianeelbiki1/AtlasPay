@@ -3,6 +3,8 @@ from uuid import uuid4
 
 import psycopg
 import pytest
+from hypothesis import given, settings
+from hypothesis import strategies as st
 
 from app.ledger import LedgerAccount, LedgerInvariantError, LedgerPosting, PostgresLedger
 from app.migrations import migrate_database
@@ -158,3 +160,22 @@ def test_posted_transaction_metadata_is_immutable() -> None:
                 ("rewritten", transaction_id),
             )
         conn.rollback()
+
+
+@given(amount=st.integers(min_value=1, max_value=10_000_000))
+@settings(max_examples=10)
+def test_equal_opposite_postings_preserve_zero_sum(amount: int) -> None:
+    store = ledger()
+    debit_account = create_account(store)
+    credit_account = create_account(store)
+
+    store.post(
+        reference=f"property-{uuid4().hex}",
+        currency="MAD",
+        postings=[
+            LedgerPosting(account_id=debit_account.id, side="debit", amount=amount),
+            LedgerPosting(account_id=credit_account.id, side="credit", amount=amount),
+        ],
+    )
+
+    assert store.account_balance(debit_account.id) + store.account_balance(credit_account.id) == 0
