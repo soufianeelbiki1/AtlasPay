@@ -119,8 +119,11 @@ def test_database_rejects_unbalanced_direct_writes_at_commit() -> None:
     account = create_account(store)
     error_pattern = "requires at least one debit and one credit"
 
-    with pytest.raises(psycopg.errors.RaiseException, match=error_pattern):
-        with psycopg.connect(DATABASE_URL) as conn, conn.cursor() as cursor:
+    with (
+        pytest.raises(psycopg.errors.RaiseException, match=error_pattern),
+        psycopg.connect(DATABASE_URL) as conn,
+        conn.cursor() as cursor,
+    ):
             transaction_id = f"jrn_{uuid4().hex}"
             cursor.execute(
                 """
