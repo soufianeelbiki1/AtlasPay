@@ -46,11 +46,11 @@ _TRANSITIONS: dict[PaymentOperation, tuple[PaymentStatus, PaymentStatus]] = {
 
 
 class PostgresPaymentOperations:
-    """Atomically changes payment state and posts the matching double-entry journal.
+    """Atomically changes payment state, ledger, operation record, and domain event.
 
     The operation idempotency key is serialized with a PostgreSQL advisory transaction
     lock. Payment state is locked with SELECT ... FOR UPDATE. State mutation, journal
-    creation, ledger entries, and the operation record commit in one transaction.
+    creation, ledger entries, operation record, and outbox event commit together.
     """
 
     def __init__(self, dsn: str) -> None:
@@ -156,6 +156,7 @@ class PostgresPaymentOperations:
 
             operation_id = f"op_{uuid4().hex}"
             journal_id = f"jrn_{uuid4().hex}"
+            event_id = f"evt_{uuid4().hex}"
             reference = f"payment:{payment_id}:{operation.value}:{operation_id}"
 
             cursor.execute(
@@ -198,6 +199,32 @@ class PostgresPaymentOperations:
                     current_status.value,
                     target_status.value,
                     journal_id,
+                ),
+            )
+            cursor.execute(
+                """
+                INSERT INTO outbox_events (
+                    id, aggregate_type, aggregate_id, event_type, payload
+                )
+                VALUES (%s, 'payment', %s, %s, %s::jsonb)
+                """,
+                (
+                    event_id,
+                    payment_id,
+                    f"payment.{target_status.value}",
+                    json.dumps(
+                        {
+                            "amount": amount,
+                            "currency": currency,
+                            "from_status": current_status.value,
+                            "journal_transaction_id": journal_id,
+                            "operation": operation.value,
+                            "operation_id": operation_id,
+                            "payment_id": payment_id,
+                            "to_status": target_status.value,
+                        },
+                        sort_keys=True,
+                    ),
                 ),
             )
 
