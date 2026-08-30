@@ -1,7 +1,9 @@
+import os
+
 from fastapi import FastAPI, Header, HTTPException, status
 
 from app.models import CreatePaymentRequest, Payment
-from app.repository import InMemoryPaymentRepository
+from app.repository import InMemoryPaymentRepository, PaymentRepository, PostgresPaymentRepository
 from app.service import IdempotencyConflictError, PaymentService
 
 app = FastAPI(
@@ -10,7 +12,15 @@ app = FastAPI(
     description="Production-minded payment orchestration API",
 )
 
-repository = InMemoryPaymentRepository()
+
+def build_repository() -> PaymentRepository:
+    database_url = os.getenv("DATABASE_URL")
+    if database_url:
+        return PostgresPaymentRepository(database_url)
+    return InMemoryPaymentRepository()
+
+
+repository = build_repository()
 service = PaymentService(repository)
 
 
