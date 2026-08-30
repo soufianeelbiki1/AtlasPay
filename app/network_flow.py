@@ -141,14 +141,10 @@ class AuthorizationNetworkFlow:
 
         if result.outcome is TransportOutcome.TIMEOUT:
             if completed_at < attempt.deadline:
-                raise ValueError(
-                    "transport timeout cannot complete before the registered deadline"
-                )
+                raise ValueError("transport timeout cannot complete before the registered deadline")
             expired = self._coordinator.expire(now=completed_at)
             if attempt.correlation not in expired:
-                raise ValueError(
-                    "timed-out attempt was not pending at its registered deadline"
-                )
+                raise ValueError("timed-out attempt was not pending at its registered deadline")
 
             reversal_correlation = self._reversal_correlations.next_for(
                 original=attempt.correlation,
