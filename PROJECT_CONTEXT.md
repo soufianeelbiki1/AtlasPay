@@ -66,7 +66,8 @@ PostgreSQL payment/idempotency persistence is implemented. The in-memory adapter
 
 ### 4. Payment-network behavior
 
-- Continue STAN/RRN correlation, issuer/acquirer routing, timeout handling, late responses, duplicate detection, and reversals.
+- [x] Add transport-independent STAN/RRN transaction coordination with explicit timeout, late-response, duplicate, and mismatch outcomes.
+- Continue issuer/acquirer routing, reversal linkage, and network adapter hardening.
 - Add explicit network adapters instead of embedding framing/network behavior in the core ISO 8583 codec.
 - Expand DE55 BER-TLV parsing, EMV tag dictionaries, and TVR decoding.
 
@@ -103,4 +104,4 @@ At the start of each pass:
 
 ## Next highest-value task
 
-Advance payment-network behavior with an explicit network transaction coordinator around ISO 8583 correlation: model request timeouts, late responses, duplicate responses, and reversal initiation without leaking transport concerns into the codec. Add deterministic tests for each failure path before broader routing or live-network claims.
+Advance payment-network behavior with issuer/acquirer routing and reversal linkage around the coordinator, then expand DE55 BER-TLV/EMV tag and TVR support. Keep all external delivery and network guarantees explicit.
