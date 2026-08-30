@@ -14,6 +14,7 @@ As of 2026-08-30, the repository already contains:
 - Strict ISO 8583 codec support with primary/secondary bitmaps, fixed/LLVAR/LLLVAR validation, and binary DE55 handling.
 - Protocol-independent canonical authorization models.
 - ISO 8583 mapping plus MTI/STAN/RRN correlation groundwork.
+- Schema-neutral ISO 20022 card-authorization projection through the canonical model with explicit STAN/DE55 loss reporting and fail-closed RRN bridge constraints; no XML/XSD conformance claim.
 - Versioned SQL migrations with checksum drift detection and a PostgreSQL advisory migration lock.
 - Append-only PostgreSQL double-entry ledger with balanced/currency invariants.
 - Atomic PostgreSQL capture/refund/reversal operations that update payment state and post a ledger journal in the same transaction.
@@ -79,8 +80,9 @@ PostgreSQL payment/idempotency persistence is implemented. The in-memory adapter
 
 ### 5. Interoperability
 
-- Complete ISO 8583 -> canonical model -> ISO 20022 mappings.
-- Document fields that cannot be mapped losslessly and define explicit rejection/fallback behavior.
+- [x] Add a scoped ISO 8583 -> canonical -> ISO 20022 authorization projection.
+- [x] Document current lossy fields and fail-closed bridge behavior.
+- [ ] Select a concrete ISO 20022 card-message family/version and add XML/XSD adapter validation before claiming wire-level conformance.
 
 ### 6. Production evidence
 
@@ -110,4 +112,4 @@ At the start of each pass:
 
 ## Next highest-value task
 
-Advance interoperability through ISO 8583 -> canonical -> ISO 20022 mappings with explicit lossy-field documentation and rejection behavior, then add observability/fault-injection around the network lifecycle. Keep protocol mapping separate from transport and accounting semantics.
+Add observability and fault-injection around the network lifecycle, then select a concrete ISO 20022 card-message family/version for XML/XSD boundary work. Keep internal interoperability claims narrower than wire-level standard conformance.
