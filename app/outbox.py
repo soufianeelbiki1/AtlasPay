@@ -74,7 +74,7 @@ class PostgresOutbox:
             for event in events:
                 try:
                     publish(event)
-                except Exception as exc:
+                except Exception as exc:  # noqa: BLE001 - broker adapters may raise arbitrary errors
                     cursor.execute(
                         """
                         UPDATE outbox_events
