@@ -301,8 +301,13 @@ class PostgresPaymentAccounting:
                 return replay
 
             currency = str(payment[2]).upper()
+            status = PaymentStatus(str(payment[3]))
             captured_amount = int(payment[5])
             refunded_amount = int(payment[6])
+            if status not in {PaymentStatus.CAPTURED, PaymentStatus.PARTIALLY_REFUNDED}:
+                raise InvalidPaymentTransitionError(
+                    f"Cannot refund payment in {status.value} state"
+                )
             refundable = captured_amount - refunded_amount
             if amount > refundable:
                 raise InvalidPaymentTransitionError(
