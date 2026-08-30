@@ -46,34 +46,51 @@ BEFORE UPDATE OR DELETE ON ledger_entries
 FOR EACH ROW
 EXECUTE FUNCTION reject_ledger_entry_mutation();
 
+CREATE OR REPLACE FUNCTION reject_ledger_transaction_mutation()
+RETURNS trigger AS $
+BEGIN
+    RAISE EXCEPTION 'posted ledger transactions are immutable';
+END;
+$ LANGUAGE plpgsql;
+
+CREATE TRIGGER ledger_transactions_immutable
+BEFORE UPDATE OR DELETE ON ledger_transactions
+FOR EACH ROW
+EXECUTE FUNCTION reject_ledger_transaction_mutation();
+
 CREATE OR REPLACE FUNCTION assert_ledger_transaction_balanced()
-RETURNS trigger AS $$
+RETURNS trigger AS $
 DECLARE
-    target_transaction_id TEXT;
+    entry_count BIGINT;
     debit_total BIGINT;
     credit_total BIGINT;
 BEGIN
-    target_transaction_id := COALESCE(NEW.transaction_id, OLD.transaction_id);
-
     SELECT
+        COUNT(*),
         COALESCE(SUM(amount) FILTER (WHERE side = 'debit'), 0),
         COALESCE(SUM(amount) FILTER (WHERE side = 'credit'), 0)
-    INTO debit_total, credit_total
+    INTO entry_count, debit_total, credit_total
     FROM ledger_entries
-    WHERE transaction_id = target_transaction_id;
+    WHERE transaction_id = NEW.id;
+
+    IF entry_count < 2 OR debit_total = 0 OR credit_total = 0 THEN
+        RAISE EXCEPTION
+            'ledger transaction % requires at least one debit and one credit',
+            NEW.id;
+    END IF;
 
     IF debit_total <> credit_total THEN
         RAISE EXCEPTION
             'ledger transaction % is unbalanced: debits %, credits %',
-            target_transaction_id, debit_total, credit_total;
+            NEW.id, debit_total, credit_total;
     END IF;
 
     RETURN NULL;
 END;
-$$ LANGUAGE plpgsql;
+$ LANGUAGE plpgsql;
 
 CREATE CONSTRAINT TRIGGER ledger_transaction_balanced
-AFTER INSERT ON ledger_entries
+AFTER INSERT ON ledger_transactions
 DEFERRABLE INITIALLY DEFERRED
 FOR EACH ROW
 EXECUTE FUNCTION assert_ledger_transaction_balanced();
