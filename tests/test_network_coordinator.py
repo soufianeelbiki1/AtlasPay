@@ -8,7 +8,12 @@ def request() -> ISO8583Message:
     return ISO8583Message("0200", {11: "123456", 37: "ABC123456789"})
 
 
-def response(*, mti: str = "0210", stan: str = "123456", rrn: str = "ABC123456789") -> ISO8583Message:
+def response(
+    *,
+    mti: str = "0210",
+    stan: str = "123456",
+    rrn: str = "ABC123456789",
+) -> ISO8583Message:
     return ISO8583Message(mti, {11: stan, 37: rrn})
 
 
@@ -35,7 +40,10 @@ def test_mismatched_response_does_not_complete_request() -> None:
     req = request()
     coordinator.register(req, now=0.0, timeout=10.0)
 
-    assert coordinator.handle_response(req, response(stan="654321"), now=1.0) is TransactionDisposition.MISMATCHED
+    assert (
+        coordinator.handle_response(req, response(stan="654321"), now=1.0)
+        is TransactionDisposition.MISMATCHED
+    )
 
 
 def test_registration_rejects_reuse_and_invalid_timeout() -> None:
