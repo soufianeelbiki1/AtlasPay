@@ -4,8 +4,8 @@ from fastapi.testclient import TestClient
 
 import app.main as main_module
 from app.operational_snapshot import (
-    DataState,
     DatabaseMeasurements,
+    DataState,
     OperationalSnapshot,
     PostgresOperationalSnapshotReader,
     SectionState,
