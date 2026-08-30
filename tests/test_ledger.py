@@ -124,23 +124,23 @@ def test_database_rejects_unbalanced_direct_writes_at_commit() -> None:
         psycopg.connect(DATABASE_URL) as conn,
         conn.cursor() as cursor,
     ):
-            transaction_id = f"jrn_{uuid4().hex}"
-            cursor.execute(
-                """
-                INSERT INTO ledger_transactions (id, reference, currency)
-                VALUES (%s, %s, %s)
-                """,
-                (transaction_id, f"direct-{uuid4().hex}", "MAD"),
+        transaction_id = f"jrn_{uuid4().hex}"
+        cursor.execute(
+            """
+            INSERT INTO ledger_transactions (id, reference, currency)
+            VALUES (%s, %s, %s)
+            """,
+            (transaction_id, f"direct-{uuid4().hex}", "MAD"),
+        )
+        cursor.execute(
+            """
+            INSERT INTO ledger_entries (
+                transaction_id, account_id, side, amount, currency
             )
-            cursor.execute(
-                """
-                INSERT INTO ledger_entries (
-                    transaction_id, account_id, side, amount, currency
-                )
-                VALUES (%s, %s, 'debit', 100, 'MAD')
-                """,
-                (transaction_id, account.id),
-            )
+            VALUES (%s, %s, 'debit', 100, 'MAD')
+            """,
+            (transaction_id, account.id),
+        )
 
 
 def test_posted_transaction_metadata_is_immutable() -> None:
