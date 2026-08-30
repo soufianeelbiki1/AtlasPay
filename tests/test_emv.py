@@ -4,12 +4,7 @@ from app.emv import EMVTLVError, decode_de55, decode_tvr, find_tags, parse_ber_t
 
 
 def test_de55_parses_known_and_unknown_tags_without_guessing() -> None:
-    payload = bytes.fromhex(
-        "9F0206000000012500"
-        "5F2A020504"
-        "95050000008000"
-        "DF0102AABB"
-    )
+    payload = bytes.fromhex("9F02060000000125005F2A02050495050000008000DF0102AABB")
 
     items = decode_de55(payload)
 
