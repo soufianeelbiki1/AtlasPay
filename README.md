@@ -1,66 +1,122 @@
 # AtlasPay
 
-**Production-minded payment orchestration API built to demonstrate reliable fintech backend engineering.**
+**Production-minded payment infrastructure, distributed-systems, and payments-analytics portfolio project.**
 
-AtlasPay is a portfolio-grade backend project for creating and tracking payment intents while modeling the engineering concerns that real payment systems face: **idempotency, explicit state transitions, auditability, failure handling, and clean API contracts**.
+AtlasPay models the hard parts of payment systems: retries, durable idempotency, protocol boundaries, double-entry accounting, at-least-once event delivery, network ambiguity, reversals, reconciliation, observability, and analytical decision support.
 
-> This repository is an engineering project and simulation. It does not process real money or connect to live payment networks.
+> AtlasPay is an engineering simulation. It does not process real money, connect to live payment networks, or claim production scale.
 
 ## Why this project exists
 
-Payment systems are deceptively difficult. A reliable backend must remain correct when clients retry requests, providers time out, events arrive twice, and services restart halfway through a transaction.
+Payment systems are difficult because a correct answer depends on more than a successful HTTP request. Clients retry. Messages duplicate. Network timeouts leave delivery ambiguous. Late responses arrive after local deadlines. Accounting must remain balanced. Events can be published twice. Operator dashboards must distinguish measured zeroes from data that is simply unavailable.
 
-AtlasPay is designed around those problems rather than around a simple CRUD demo.
+AtlasPay is built around those failure modes rather than around a CRUD demo.
 
-## Current MVP
+## Implemented engineering evidence
 
-- FastAPI REST API
-- Create payment intents
-- Retrieve payment state
-- Explicit payment lifecycle (`pending`, `authorized`, `captured`, `failed`, `cancelled`)
-- Durable PostgreSQL idempotency with request fingerprinting and database uniqueness constraints
-- Decimal-safe money representation using integer minor units
-- Domain validation with Pydantic
-- Unit, property-based, PostgreSQL persistence, concurrency, and migration tests
-- Strict ISO 8583 message codec with primary/secondary bitmaps, LLVAR/LLLVAR validation, and binary DE55 support
-- Docker-ready application
+### Payment domain and durable state
+
+- FastAPI payment API with explicit payment lifecycle.
+- Integer minor-unit money representation; no floating-point money arithmetic.
+- PostgreSQL payment persistence and durable idempotency using request fingerprints, unique constraints, and advisory transaction locks.
+- Ordered SQL migrations with checksum drift detection and serialized migration execution.
+- Atomic capture/refund/reversal operations tying business state, operation records, ledger postings, and outbox events together inside one database transaction.
+
+### Double-entry ledger and reconciliation
+
+- Append-only debit/credit entries with immutable posted transactions.
+- Database-enforced balanced-transaction and currency invariants.
+- Replay-safe business-operation linkage.
+- Deterministic read-only reconciliation across payments, operations, journals, ledger entries, and outbox linkage.
+- Explicit bounded replay controls; published delivery history and ledger history are never silently rewritten.
+
+### Event delivery
+
+- Transactional outbox committed atomically with payment state.
+- Database-backed publisher reference using `FOR UPDATE SKIP LOCKED`.
+- Explicit at-least-once semantics, bounded retry accounting, and poison-message retention.
+- Idempotent consumer claims keyed by `(consumer_name, event_id)`.
+- No vague exactly-once claim across broker or network boundaries.
+
+### ISO 8583, EMV, and ISO 20022
+
+- Strict ISO 8583 message-body codec with primary/secondary bitmaps and fixed/LLVAR/LLLVAR validation.
+- Binary DE55 support kept opaque at the generic ISO 8583 boundary.
+- BER-TLV EMV decoding with constructed templates, duplicate-tag preservation, bounded nesting/length parsing, tag metadata, and explainable TVR decoding.
+- Canonical authorization model with STAN/RRN correlation.
+- Scoped ISO 8583 → canonical → ISO 20022 authorization projection with explicit mapping losses and fail-closed bridge constraints.
+- No generic ISO 20022 XML/XSD or scheme-certification claim yet.
+
+### Payment-network behavior
+
+- Transport-independent issuer/acquirer routing with deterministic longest-prefix selection and currency eligibility.
+- Explicit coordinator outcomes for accepted, mismatched, timed-out, late, and duplicate responses.
+- Byte-oriented network transport port separated from the ISO 8583 codec.
+- Timeout-triggered reversal correlation while preserving external delivery ambiguity.
+- One-to-one original/reversal correlation with explicit reasons; correlation does not imply reversal delivery or acceptance.
+- Deterministic fault injection for known-local failures, ambiguous timeouts, and malformed network responses.
+
+### Observability and operator contract
+
+- Low-cardinality Prometheus network metrics and exporter-neutral OpenTelemetry spans.
+- PAN, STAN, RRN, DE55, and transaction identifiers are deliberately excluded from metric labels.
+- Protected read-only `/v1/ops/snapshot` contract for Nexus.
+- Durable payment, operation, reconciliation, and outbox measurements are aggregated from PostgreSQL.
+- Non-durable network analytics are explicitly reported as unavailable rather than fabricated as zero.
+
+## Payments Analytics Warehouse
+
+The `analytics/` directory adds a decision-oriented SQL layer over AtlasPay's durable schema. It is designed as evidence for **Data Analyst / Analytics Engineer / Data Scientist** hiring as well as payment operations work.
+
+Current marts:
+
+- `analytics/sql/daily_payment_kpis.sql` — daily creation cohorts by currency, gross minor-unit amount, average ticket, and current durable status composition.
+- `analytics/sql/payment_operation_latency.sql` — capture/refund/reversal counts plus average/p50/p95 elapsed time from payment creation to durable operation creation.
+- `analytics/sql/outbox_reliability.sql` — published/unpublished/retry-limit event counts and average/p95 publish latency by day and event type.
+- `analytics/sql/ledger_daily_balance.sql` — daily debit/credit totals and imbalance control by currency.
+
+These queries are CI-tested against the migrated PostgreSQL schema. Their metric definitions and limitations are documented in [`analytics/README.md`](analytics/README.md).
+
+Important claim boundary: `payments.status` is current state, not a historical state-event table, so the current status composition is **not** mislabeled as an authorization funnel. Likewise, operation timing is not issuer/network latency. Stronger issuer and authorization analytics will wait for a durable privacy-conscious network fact table.
 
 ## Architecture
 
 ```text
-Client
-  |
-  v
-FastAPI routes
-  |
-  v
-Payment service
-  |
-  v
-Repository boundary
-  |
-  +----> PostgreSQL payments + durable idempotency
-  |
-  v
-Domain models
+Clients / operator consumers
+          |
+          v
+       FastAPI
+          |
+          +-------------------> protected operational snapshot
+          |
+          v
+ payment application layer
+          |
+          +----> PostgreSQL payments + idempotency
+          +----> immutable double-entry ledger
+          +----> payment operations
+          +----> transactional outbox
+          |
+          v
+ canonical payment/network model
+          |
+   +------+------+----------------+
+   |             |                |
+ISO 8583        EMV           ISO 20022
+adapter       DE55 parser     projection
+   |
+   v
+transport / issuer routing / correlation
 
-ISO 8583 transport adapters use the explicit codec profile at the network boundary.
+PostgreSQL durable state
+          |
+          v
+ analytics SQL marts
 ```
 
-AtlasPay now has a PostgreSQL adapter for durable payment/idempotency persistence. The in-memory adapter remains for isolated tests and local experimentation. Database schema changes are applied through ordered SQL migrations (`python -m app.migrations`); repository construction never mutates schema.
-
-The ISO 8583 codec currently covers the message body only: ASCII MTI, binary
-primary/secondary bitmaps, and ASCII LLVAR/LLLVAR length prefixes. Network
-headers, TPDU framing, packed BCD variants, and network-specific field
-profiles belong in explicit adapters. Unknown fields and malformed values are
-rejected rather than guessed.
-
-Delivery guarantees and failure boundaries are documented in
-[`docs/adr/0001-delivery-semantics.md`](docs/adr/0001-delivery-semantics.md).
+The ISO 8583 codec covers the message body only. Network headers, TPDU framing, packed BCD variants, sockets/TLS, and network-specific profiles belong in explicit adapters. Unknown or malformed protocol values fail closed rather than being guessed.
 
 ## API example
-
-### Create a payment
 
 ```bash
 curl -X POST http://localhost:8000/v1/payments \
@@ -73,19 +129,7 @@ curl -X POST http://localhost:8000/v1/payments \
   }'
 ```
 
-Example response:
-
-```json
-{
-  "id": "pay_...",
-  "amount": 12900,
-  "currency": "MAD",
-  "merchant_reference": "order-123",
-  "status": "pending"
-}
-```
-
-`amount` is expressed in the currency's **minor unit** (for example, 12900 = 129.00 MAD).
+`amount` is expressed in the currency's minor unit (for example, `12900` means `129.00 MAD` for a two-decimal currency).
 
 ## Run locally
 
@@ -100,71 +144,41 @@ python -m app.migrations
 uvicorn app.main:app --reload
 ```
 
-Then open `http://localhost:8000/docs` for the interactive OpenAPI documentation.
+Open `http://localhost:8000/docs` for OpenAPI documentation.
 
-## Run tests
+## Quality gates
 
 ```bash
+ruff check .
+ruff format --check .
+python -m compileall app tests
 pytest
 ```
 
-## Docker
+GitHub Actions also provisions PostgreSQL and exercises migrations, durable persistence, concurrency, reconciliation, operational-snapshot aggregation, and analytics SQL compatibility.
 
-```bash
-docker build -t atlaspay .
-docker run -p 8000:8000 atlaspay
-```
+## Current next slices
 
-## Engineering roadmap
+- Persist a privacy-conscious authorization/network read model so Nexus and analytics can show real authorization outcomes, issuer-route health, timeouts/late responses, and latency history.
+- Select a concrete ISO 20022 card-message family/version and add XML/XSD boundary validation before any wire-conformance claim.
+- Add structured audit logging that avoids sensitive values.
+- Add load/performance methodology with reproducible measurements rather than fake scale numbers.
+- Extend the analytics warehouse with durable network facts, decline taxonomy, issuer cohorts, reversal analysis, and a deployable decision dashboard once the required data exists.
 
-- [x] Payment domain model and REST API
-- [x] Idempotent payment creation
-- [x] Unit tests
-- [x] Strict ISO 8583 MTI/bitmap/field codec and property-based round-trip tests
-- [x] PostgreSQL persistence with versioned migrations and durable idempotency
-- [x] Append-only PostgreSQL double-entry ledger foundation
-- [ ] Payment state-machine enforcement
-- [ ] Provider adapter interface and sandbox provider
-- [ ] Transactional outbox + asynchronous event processing
-- [ ] Signed webhook delivery with retries
-- [ ] Redis-backed rate limiting / idempotency cache
-- [ ] OpenTelemetry traces and Prometheus metrics
-- [x] CI with GitHub Actions
-- [ ] Load tests and failure-injection tests
-- [ ] Architecture decision records (ADRs)
+## Engineering principles
 
-## What this demonstrates
+1. **State guarantees precisely.** Database atomicity, broker redelivery, network ambiguity, and operator availability are different guarantees.
+2. **Fail closed.** Unsupported mappings and malformed inputs are rejected rather than coerced into plausible data.
+3. **Keep money exact.** Monetary values use integer minor units and analytics never aggregate across currencies.
+4. **Prefer durable invariants.** Unique constraints, append-only accounting, reconciliation, and idempotent consumers do more work than optimistic comments.
+5. **Do not fabricate measurements.** Missing network history remains unavailable until a durable source exists.
+6. **Use infrastructure for a reason.** The project stays modular rather than becoming decorative microservices.
 
-AtlasPay is meant to make engineering skills visible to recruiters and research/graduate reviewers:
+## Documentation
 
-- API design and backend architecture
-- Correctness under retries
-- Domain-driven modeling
-- Testability and separation of concerns
-- Distributed-systems thinking
-- Fintech-specific reliability concerns
-- Production-oriented documentation
+Architecture decisions and guarantee boundaries live under `docs/adr/`. The continuously updated implementation state and next engineering priority are recorded in `PROJECT_CONTEXT.md`.
 
-## License
-
-MIT
-
-## Portfolio continuity contract
-
-This repository is the payments and distributed-systems flagship in the soufianeelbiki1 portfolio. Future work must begin by inspecting the latest repository state and CI, then fixing regressions before adding capability.
-
-### Build sequence
-
-1. Strict ISO 8583 MTI, primary/secondary bitmap, fixed/LLVAR/LLLVAR field codecs with validation and property-based round-trip tests.
-2. STAN/RRN correlation, issuer/acquirer routing, timeout and late-response handling, duplicate detection, and reversals.
-3. DE55 BER-TLV parsing, EMV tag dictionaries, TVR decoding, and a canonical internal payment model.
-4. ISO 8583 ↔ canonical model ↔ ISO 20022 mappings with documented lossy fields and explicit failure semantics.
-5. Durable idempotency, PostgreSQL constraints, double-entry ledger, transactional outbox, and replay/rebuild.
-6. Kafka/event streaming, at-least-once delivery with idempotent consumers, reconciliation, settlement hooks, observability, security, fault injection, and load tests.
-
-Nexus is the later operator/control-plane UI and should consume real AtlasPay operational data. Do not claim exactly-once behavior across external boundaries; document the actual guarantees and failure boundaries. Avoid fake scale claims, toy abstractions, and unnecessary microservices. Record consequential choices as ADRs.
-
-### Portfolio map
+## Portfolio map
 
 - AtlasPay: https://github.com/soufianeelbiki1/AtlasPay
 - AtlasRAG: https://github.com/soufianeelbiki1/AtlasRAG
@@ -172,4 +186,6 @@ Nexus is the later operator/control-plane UI and should consume real AtlasPay op
 - Nexus: https://github.com/soufianeelbiki1/Nexus
 - Portfolio: https://github.com/soufianeelbiki1/portfolio
 
-Status snapshot (2026-08-30): AtlasPay has strict ISO 8583 codecs plus durable PostgreSQL payment/idempotency persistence and explicit versioned migrations. No production deployment or live payment-network integration is claimed until independently verified.
+## License
+
+MIT
