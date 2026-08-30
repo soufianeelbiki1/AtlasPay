@@ -48,5 +48,8 @@ jobs:
       - name: Compile
         run: python -m compileall -q app tests
 
+      - name: Migrate database
+        run: python -m app.migrations
+
       - name: Test
         run: pytest -q
