@@ -34,7 +34,9 @@ class NetworkTransactionCoordinator:
         self._completed: set[NetworkCorrelation] = set()
         self._timed_out: set[NetworkCorrelation] = set()
 
-    def register(self, request: ISO8583Message, *, now: float, timeout: float) -> NetworkCorrelation:
+    def register(
+        self, request: ISO8583Message, *, now: float, timeout: float
+    ) -> NetworkCorrelation:
         if timeout <= 0:
             raise ValueError("timeout must be greater than zero")
         key = correlation_key(request)
@@ -44,9 +46,9 @@ class NetworkTransactionCoordinator:
         return key
 
     def expire(self, *, now: float) -> tuple[NetworkCorrelation, ...]:
-        expired = tuple(sorted(
-            key for key, transaction in self._pending.items() if transaction.deadline <= now
-        ))
+        expired = tuple(
+            sorted(key for key, transaction in self._pending.items() if transaction.deadline <= now)
+        )
         for key in expired:
             self._pending.pop(key)
             self._timed_out.add(key)
