@@ -1,6 +1,7 @@
 import pytest
 
 from app.canonical import AuthorizationRequest, CardPaymentInstrument, NetworkCorrelation
+from app.iso8583_adapter import authorization_from_iso8583, authorization_to_iso8583
 from app.iso20022 import (
     ISO20022CardAuthorization,
     ISO20022MappingError,
@@ -8,7 +9,6 @@ from app.iso20022 import (
     authorization_from_iso20022,
     authorization_to_iso20022,
 )
-from app.iso8583_adapter import authorization_from_iso8583, authorization_to_iso8583
 
 
 def canonical(*, icc_data: bytes | None = None) -> AuthorizationRequest:
