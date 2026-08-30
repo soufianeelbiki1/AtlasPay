@@ -31,10 +31,7 @@ def test_exchange_records_low_cardinality_outcome_and_reversal_metrics() -> None
 
     output = metrics_text(telemetry)
 
-    expected_attempt = (
-        'atlaspay_network_attempts_total{issuer="issuer-bank-a",route="issuer-a"} 1.0'
-    )
-    assert expected_attempt in output
+    assert 'atlaspay_network_attempts_total{issuer="issuer-bank-a",route="issuer-a"} 1.0' in output
     assert 'transport_outcome="timeout"' in output
     assert 'disposition="timed_out"' in output
     assert 'delivery_unknown="true"' in output
