@@ -108,6 +108,7 @@ def test_ledger_entries_are_append_only() -> None:
                 "UPDATE ledger_entries SET amount = amount + 1 WHERE id = %s",
                 (entry_id,),
             )
+        conn.rollback()
 
 
 def test_database_rejects_unbalanced_direct_writes_at_commit() -> None:
@@ -134,3 +135,26 @@ def test_database_rejects_unbalanced_direct_writes_at_commit() -> None:
                 """,
                 (transaction_id, account.id),
             )
+
+
+def test_posted_transaction_metadata_is_immutable() -> None:
+    assert DATABASE_URL is not None
+    store = ledger()
+    left = create_account(store)
+    right = create_account(store)
+    transaction_id = store.post(
+        reference=f"immutable-journal-{uuid4().hex}",
+        currency="MAD",
+        postings=[
+            LedgerPosting(account_id=left.id, side="debit", amount=200),
+            LedgerPosting(account_id=right.id, side="credit", amount=200),
+        ],
+    )
+
+    with psycopg.connect(DATABASE_URL) as conn, conn.cursor() as cursor:
+        with pytest.raises(psycopg.errors.RaiseException, match="immutable"):
+            cursor.execute(
+                "UPDATE ledger_transactions SET reference = %s WHERE id = %s",
+                ("rewritten", transaction_id),
+            )
+        conn.rollback()
