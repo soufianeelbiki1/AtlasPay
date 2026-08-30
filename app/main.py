@@ -1,8 +1,15 @@
 import os
+from secrets import compare_digest
 
 from fastapi import FastAPI, Header, HTTPException, status
 
 from app.models import CreatePaymentRequest, Payment
+from app.operational_snapshot import (
+    OperationalSnapshot,
+    OperationalSnapshotReader,
+    PostgresOperationalSnapshotReader,
+    UnavailableOperationalSnapshotReader,
+)
 from app.repository import InMemoryPaymentRepository, PaymentRepository, PostgresPaymentRepository
 from app.service import IdempotencyConflictError, PaymentService
 
@@ -12,6 +19,8 @@ app = FastAPI(
     description="Production-minded payment orchestration API",
 )
 
+OPS_TOKEN_ENV = "ATLASPAY_OPS_TOKEN"
+
 
 def build_repository() -> PaymentRepository:
     database_url = os.getenv("DATABASE_URL")
@@ -20,13 +29,62 @@ def build_repository() -> PaymentRepository:
     return InMemoryPaymentRepository()
 
 
+def build_operational_snapshot_reader() -> OperationalSnapshotReader:
+    database_url = os.getenv("DATABASE_URL")
+    if database_url:
+        return PostgresOperationalSnapshotReader(database_url)
+    return UnavailableOperationalSnapshotReader(
+        "DATABASE_URL is not configured; durable operational sections cannot be measured"
+    )
+
+
+def authorize_operational_request(authorization: str | None) -> None:
+    """Fail closed unless the configured bearer token matches in constant time."""
+
+    expected = os.getenv(OPS_TOKEN_ENV)
+    if not expected:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Operational API is disabled because ATLASPAY_OPS_TOKEN is not configured",
+        )
+
+    scheme, separator, supplied = (authorization or "").partition(" ")
+    if separator != " " or scheme.lower() != "bearer" or not supplied:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Valid bearer credentials are required",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    if not compare_digest(supplied, expected):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Valid bearer credentials are required",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+
 repository = build_repository()
 service = PaymentService(repository)
+operational_snapshot_reader = build_operational_snapshot_reader()
 
 
 @app.get("/health", tags=["system"])
 def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.get(
+    "/v1/ops/snapshot",
+    response_model=OperationalSnapshot,
+    tags=["operations"],
+)
+def get_operational_snapshot(
+    authorization: str | None = Header(default=None, alias="Authorization"),
+) -> OperationalSnapshot:
+    """Return protected read-only operator state without fabricating unavailable metrics."""
+
+    authorize_operational_request(authorization)
+    return operational_snapshot_reader.read()
 
 
 @app.post(

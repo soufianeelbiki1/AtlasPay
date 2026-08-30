@@ -29,11 +29,16 @@ As of 2026-08-30, the repository already contains:
 - One-to-one original/reversal network correlation linkage with explicit reasons and no external-delivery claim.
 - Strict EMV BER-TLV decoding for DE55 with constructed-template recursion, duplicate preservation, bounded nesting/length parsing, known-tag metadata, and explainable five-byte TVR decoding.
 - Explicit byte-oriented network transport port plus ISO 8583 adapter boundary; transport timeouts preserve ambiguous external-delivery status, while malformed responses fail at the adapter boundary.
-- Authorization network flow now ties canonical/wire correlation equality, issuer routing, coordinator deadlines, transport outcomes, timeout-triggered reversal correlation, late original responses, and safe cancellation after known-local transport failure without claiming reversal delivery.
+- Authorization network flow ties canonical/wire correlation equality, issuer routing, coordinator deadlines, transport outcomes, timeout-triggered reversal correlation, late original responses, and safe cancellation after known-local transport failure without claiming reversal delivery.
+- Low-cardinality Prometheus network attempt/outcome/latency/reversal metrics and exporter-neutral OpenTelemetry spans that deliberately exclude PAN, STAN, RRN, DE55, and transaction identifiers from labels.
+- Deterministic transport-boundary fault injection for known-local failures, delivery-ambiguous timeouts, and malformed ISO 8583 responses.
+- A versioned read-only operator snapshot contract for Nexus that measures durable payments, operations, reconciliation, and outbox state from PostgreSQL, represents unavailable sections as nullable/unavailable rather than fake zeroes, and keeps non-durable network metrics explicitly unavailable.
+- The operator snapshot is fail-closed behind `ATLASPAY_OPS_TOKEN`; an unset token disables the endpoint and invalid bearer credentials are rejected.
+- PostgreSQL integration tests exercise the real operational aggregation query and existing reconciliation path.
 - Unit/property-oriented tests, PostgreSQL concurrency/integration tests, and GitHub Actions CI.
-- ADR documentation for delivery semantics, ledger invariants, transactional outbox guarantees, and failure boundaries.
+- ADR documentation for delivery semantics, ledger invariants, transactional outbox guarantees, ISO 20022 interoperability boundaries, and the AtlasPay/Nexus operator snapshot contract.
 
-PostgreSQL payment/idempotency persistence is implemented. The in-memory adapter remains for isolated use. Schema ownership is explicit: migrations run separately from repository construction, are serialized with a PostgreSQL advisory lock, and reject checksum drift for already-applied versions. Payment operation atomicity covers database-local state, ledger mutation, operation record, and outbox persistence. External publication remains explicitly at-least-once: a crash after broker publication but before `published_at` commits can cause redelivery, so consumers must deduplicate or be idempotent. Reconciliation is deliberately observational: discrepancies are reported deterministically and repair actions are explicit, bounded controls rather than automatic accounting mutation. Network routing/correlation is transport-independent and does not imply issuer acceptance or successful external delivery. No production deployment or live payment-network integration should be claimed unless independently verified.
+PostgreSQL payment/idempotency persistence is implemented. The in-memory adapter remains for isolated use. Schema ownership is explicit: migrations run separately from repository construction, are serialized with a PostgreSQL advisory lock, and reject checksum drift for already-applied versions. Payment operation atomicity covers database-local state, ledger mutation, operation record, and outbox persistence. External publication remains explicitly at-least-once: a crash after broker publication but before `published_at` commits can cause redelivery, so consumers must deduplicate or be idempotent. Reconciliation is deliberately observational: discrepancies are reported deterministically and repair actions are explicit, bounded controls rather than automatic accounting mutation. Network routing/correlation is transport-independent and does not imply issuer acceptance or successful external delivery. Network telemetry is currently process-local; the operator contract therefore does not claim durable authorization-rate or issuer-latency data. No production deployment or live payment-network integration should be claimed unless independently verified.
 
 ## Engineering invariants
 
@@ -45,6 +50,7 @@ PostgreSQL payment/idempotency persistence is implemented. The in-memory adapter
 6. Unknown or malformed protocol fields should be rejected rather than guessed.
 7. Prefer a modular monolith until measured constraints justify additional services.
 8. Every consequential architecture choice should be captured in an ADR with guarantees, failure modes, and trade-offs.
+9. Operational APIs fail closed, are observational by default, and distinguish unavailable measurements from measured zeroes.
 
 ## Priority build sequence
 
@@ -77,6 +83,8 @@ PostgreSQL payment/idempotency persistence is implemented. The in-memory adapter
 - [x] Add issuer/acquirer routing and one-to-one reversal correlation linkage.
 - [x] Add explicit network adapters instead of embedding framing/network behavior in the core ISO 8583 codec.
 - [x] Expand DE55 BER-TLV parsing, EMV tag dictionaries, and TVR decoding.
+- [x] Add OpenTelemetry/Prometheus network observability with low-cardinality, non-sensitive labels.
+- [x] Add deterministic network fault injection covering local failure, ambiguous timeout, and malformed response paths.
 
 ### 5. Interoperability
 
@@ -84,19 +92,29 @@ PostgreSQL payment/idempotency persistence is implemented. The in-memory adapter
 - [x] Document current lossy fields and fail-closed bridge behavior.
 - [ ] Select a concrete ISO 20022 card-message family/version and add XML/XSD adapter validation before claiming wire-level conformance.
 
-### 6. Production evidence
+### 6. Operator/control-plane integration
 
-- OpenTelemetry traces and Prometheus metrics.
-- Structured audit logging without leaking sensitive values.
-- Fault-injection tests, load tests, security checks, and meaningful SLO-oriented measurements.
-- Deployment only when CI is green and a real live URL can be verified.
+- [x] Publish a versioned read-only AtlasPay operator snapshot contract for durable state.
+- [x] Protect the operational API with fail-closed bearer authentication.
+- [x] Verify real PostgreSQL aggregation and reconciliation paths in CI.
+- [ ] Have Nexus consume the AtlasPay API through a validated source adapter without silent fixture fallback.
+- [ ] Add a durable source for network observations before exposing authorization-rate/issuer-latency metrics through the operator contract.
+
+### 7. Production evidence
+
+- [x] OpenTelemetry traces and Prometheus network metrics.
+- [x] Deterministic network fault-injection tests.
+- [ ] Structured audit logging without leaking sensitive values.
+- [ ] Load/performance tests with documented methodology and non-fabricated measurements.
+- [ ] Security checks beyond application bearer-token protection (TLS/workload identity/network policy/rate limits where a real deployment exists).
+- [ ] Deployment only when CI is green and a real live URL can be verified.
 
 ## Relationship to other repositories
 
-- `Nexus`: operator/control-plane UI for AtlasPay. It should eventually consume real AtlasPay operational data such as transaction flows, issuer latency, authorization rates, reversals, ledger/reconciliation status, Kafka lag, incidents, topology, and transaction drill-downs.
-- `AtlasRAG`: separate production AI/LLM flagship focused on ingestion, hybrid retrieval, reranking, evaluation, groundedness, provider abstraction, cost/latency tracing, tenancy, jobs, security, and robust tests.
-- `ForecastLab`: transitioning into an ICAO passport-photo compliance CV/ML flagship with explainable per-rule scoring, pose/quality/segmentation checks, evaluation/versioning, FastAPI inference, and polished demo UI.
-- `portfolio` and profile README: keep claims, links, deployment status, and project positioning synchronized.
+- `Nexus`: operator/control-plane UI for AtlasPay. It should consume the protected v1 snapshot for durable payment, reconciliation, and outbox state, preserve partial/unavailable semantics, and only expose network rates/latency after AtlasPay provides a durable verified source.
+- `AtlasRAG`: separate production AI/LLM flagship focused on ingestion, hybrid retrieval, reranking, evaluation, groundedness, provider abstraction, token/cost/latency accounting, tenancy, jobs, security, and robust tests.
+- `ForecastLab`: ICAO/passport-photo compliance CV/ML flagship with explainable per-rule scoring, pose/quality checks, versioned policy inference, and licensed held-out evaluation infrastructure without unverified real-world accuracy claims.
+- `portfolio` and profile README: keep claims, links, deployment status, and project positioning synchronized with merged evidence.
 
 ## Runbook for future engineering passes
 
@@ -112,4 +130,4 @@ At the start of each pass:
 
 ## Next highest-value task
 
-Add observability and fault-injection around the network lifecycle, then select a concrete ISO 20022 card-message family/version for XML/XSD boundary work. Keep internal interoperability claims narrower than wire-level standard conformance.
+Merge the protected v1 operator snapshot only after the full PostgreSQL CI path is green, then implement a validated AtlasPay API source in Nexus with explicit unavailable-state rendering and no silent fallback to fixtures. After that, select a concrete ISO 20022 card-message family/version for XML/XSD boundary validation and add structured audit logging/security evidence.
