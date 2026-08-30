@@ -87,15 +87,21 @@ class PostgresPaymentRepository:
             currency=row[2],
             merchant_reference=row[3],
             status=row[4],
-            created_at=row[5],
+            authorized_amount=row[5],
+            captured_amount=row[6],
+            refunded_amount=row[7],
+            created_at=row[8],
         )
 
     @staticmethod
     def _insert_payment(cursor, payment: Payment) -> None:
         cursor.execute(
             """
-            INSERT INTO payments (id, amount, currency, merchant_reference, status, created_at)
-            VALUES (%s, %s, %s, %s, %s, %s)
+            INSERT INTO payments (
+                id, amount, currency, merchant_reference, status,
+                authorized_amount, captured_amount, refunded_amount, created_at
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
             """,
             (
                 payment.id,
@@ -103,6 +109,9 @@ class PostgresPaymentRepository:
                 payment.currency,
                 payment.merchant_reference,
                 payment.status.value,
+                payment.authorized_amount,
+                payment.captured_amount,
+                payment.refunded_amount,
                 payment.created_at,
             ),
         )
@@ -156,7 +165,8 @@ class PostgresPaymentRepository:
                 else:
                     cursor.execute(
                         """
-                        SELECT id, amount, currency, merchant_reference, status, created_at
+                        SELECT id, amount, currency, merchant_reference, status,
+                               authorized_amount, captured_amount, refunded_amount, created_at
                         FROM payments
                         WHERE id = %s
                         """,
@@ -178,7 +188,8 @@ class PostgresPaymentRepository:
         with self._connect() as conn, conn.cursor() as cursor:
             cursor.execute(
                 """
-                SELECT id, amount, currency, merchant_reference, status, created_at
+                SELECT id, amount, currency, merchant_reference, status,
+                               authorized_amount, captured_amount, refunded_amount, created_at
                 FROM payments
                 WHERE id = %s
                 """,
