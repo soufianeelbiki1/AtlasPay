@@ -2,7 +2,7 @@
 
 ## Portfolio role
 
-AtlasPay is the flagship payments and distributed-systems project in the `soufianeelbiki1` portfolio. It should demonstrate correctness under retries, explicit failure semantics, protocol interoperability, durable state, ledgering, event delivery, observability, and production-minded trade-offs without claiming fake scale or impossible exactly-once guarantees across external boundaries.
+AtlasPay is the flagship payments, distributed-systems, and payments-analytics project in the `soufianeelbiki1` portfolio. It should demonstrate correctness under retries, explicit failure semantics, protocol interoperability, durable state, ledgering, event delivery, observability, analytics/decision support, and production-minded trade-offs without claiming fake scale or impossible exactly-once guarantees across external boundaries.
 
 ## Current state
 
@@ -34,11 +34,15 @@ As of 2026-08-30, the repository already contains:
 - Deterministic transport-boundary fault injection for known-local failures, delivery-ambiguous timeouts, and malformed ISO 8583 responses.
 - A versioned read-only operator snapshot contract for Nexus that measures durable payments, operations, reconciliation, and outbox state from PostgreSQL, represents unavailable sections as nullable/unavailable rather than fake zeroes, and keeps non-durable network metrics explicitly unavailable.
 - The operator snapshot is fail-closed behind `ATLASPAY_OPS_TOKEN`; an unset token disables the endpoint and invalid bearer credentials are rejected.
+- Nexus now consumes the protected AtlasPay API when live configuration is present, fails closed on source/config/contract failure without fixture fallback, and renders only producer fields that are actually available.
+- A payments analytics warehouse under `analytics/` with PostgreSQL SQL marts for daily payment creation/current-status composition, capture/refund/reversal lifecycle timing, outbox reliability, and daily ledger debit-credit controls.
+- Analytics mart contracts explicitly retain currency for monetary grains, distinguish current payment state from historical funnel events, distinguish lifecycle timing from network latency, and use the same retry-limit semantics as operational reporting.
+- PostgreSQL CI contract tests execute the analytics marts against the migrated schema and verify their output columns.
 - PostgreSQL integration tests exercise the real operational aggregation query and existing reconciliation path.
 - Unit/property-oriented tests, PostgreSQL concurrency/integration tests, and GitHub Actions CI.
 - ADR documentation for delivery semantics, ledger invariants, transactional outbox guarantees, ISO 20022 interoperability boundaries, and the AtlasPay/Nexus operator snapshot contract.
 
-PostgreSQL payment/idempotency persistence is implemented. The in-memory adapter remains for isolated use. Schema ownership is explicit: migrations run separately from repository construction, are serialized with a PostgreSQL advisory lock, and reject checksum drift for already-applied versions. Payment operation atomicity covers database-local state, ledger mutation, operation record, and outbox persistence. External publication remains explicitly at-least-once: a crash after broker publication but before `published_at` commits can cause redelivery, so consumers must deduplicate or be idempotent. Reconciliation is deliberately observational: discrepancies are reported deterministically and repair actions are explicit, bounded controls rather than automatic accounting mutation. Network routing/correlation is transport-independent and does not imply issuer acceptance or successful external delivery. Network telemetry is currently process-local; the operator contract therefore does not claim durable authorization-rate or issuer-latency data. No production deployment or live payment-network integration should be claimed unless independently verified.
+PostgreSQL payment/idempotency persistence is implemented. The in-memory adapter remains for isolated use. Schema ownership is explicit: migrations run separately from repository construction, are serialized with a PostgreSQL advisory lock, and reject checksum drift for already-applied versions. Payment operation atomicity covers database-local state, ledger mutation, operation record, and outbox persistence. External publication remains explicitly at-least-once: a crash after broker publication but before `published_at` commits can cause redelivery, so consumers must deduplicate or be idempotent. Reconciliation is deliberately observational: discrepancies are reported deterministically and repair actions are explicit, bounded controls rather than automatic accounting mutation. Network routing/correlation is transport-independent and does not imply issuer acceptance or successful external delivery. Network telemetry is currently process-local; the operator and analytics contracts therefore do not claim durable authorization-rate or issuer-latency history. Payment `status` is current mutable state, not a historical status event table, so analytics must not describe current status composition as a historical authorization/conversion funnel. No production deployment or live payment-network integration should be claimed unless independently verified.
 
 ## Engineering invariants
 
@@ -51,6 +55,7 @@ PostgreSQL payment/idempotency persistence is implemented. The in-memory adapter
 7. Prefer a modular monolith until measured constraints justify additional services.
 8. Every consequential architecture choice should be captured in an ADR with guarantees, failure modes, and trade-offs.
 9. Operational APIs fail closed, are observational by default, and distinguish unavailable measurements from measured zeroes.
+10. Analytics must preserve currency in monetary grains, state the time/grain of every metric, label synthetic data as synthetic, and never manufacture historical facts from current-state tables.
 
 ## Priority build sequence
 
@@ -97,10 +102,22 @@ PostgreSQL payment/idempotency persistence is implemented. The in-memory adapter
 - [x] Publish a versioned read-only AtlasPay operator snapshot contract for durable state.
 - [x] Protect the operational API with fail-closed bearer authentication.
 - [x] Verify real PostgreSQL aggregation and reconciliation paths in CI.
-- [ ] Have Nexus consume the AtlasPay API through a validated source adapter without silent fixture fallback.
+- [x] Have Nexus consume the AtlasPay API through a validated source adapter without silent fixture fallback.
 - [ ] Add a durable source for network observations before exposing authorization-rate/issuer-latency metrics through the operator contract.
 
-### 7. Production evidence
+### 7. Data analytics and decision support
+
+- [x] Add documented durable source grains and metric claim boundaries.
+- [x] Add daily payment KPI/current-status composition mart by currency.
+- [x] Add capture/refund/reversal lifecycle timing with p50/p95 elapsed time.
+- [x] Add outbox delivery reliability and retry-limit mart.
+- [x] Add daily ledger debit-credit balance control mart.
+- [x] Execute analytics SQL against the migrated PostgreSQL schema in CI.
+- [ ] Persist privacy-conscious authorization/network facts suitable for historical analytics.
+- [ ] Add decline taxonomy, issuer performance, timeout/late-response cohorts, and reversal analytics after the fact source exists.
+- [ ] Add a reproducible synthetic dataset generator and analyst-facing dashboard with metric definitions and decision narratives.
+
+### 8. Production evidence
 
 - [x] OpenTelemetry traces and Prometheus network metrics.
 - [x] Deterministic network fault-injection tests.
@@ -111,10 +128,10 @@ PostgreSQL payment/idempotency persistence is implemented. The in-memory adapter
 
 ## Relationship to other repositories
 
-- `Nexus`: operator/control-plane UI for AtlasPay. It should consume the protected v1 snapshot for durable payment, reconciliation, and outbox state, preserve partial/unavailable semantics, and only expose network rates/latency after AtlasPay provides a durable verified source.
+- `Nexus`: operator/control-plane UI for AtlasPay. It consumes the protected v1 snapshot in live mode when configured, preserves partial/unavailable semantics, fails closed rather than silently substituting fixtures, and should only expose network rates/latency after AtlasPay provides a durable verified source.
 - `AtlasRAG`: separate production AI/LLM flagship focused on ingestion, hybrid retrieval, reranking, evaluation, groundedness, provider abstraction, token/cost/latency accounting, tenancy, jobs, security, and robust tests.
 - `ForecastLab`: ICAO/passport-photo compliance CV/ML flagship with explainable per-rule scoring, pose/quality checks, versioned policy inference, and licensed held-out evaluation infrastructure without unverified real-world accuracy claims.
-- `portfolio` and profile README: keep claims, links, deployment status, and project positioning synchronized with merged evidence.
+- `portfolio` and profile README: keep claims, links, deployment status, analytics role lenses, and project positioning synchronized with merged evidence.
 
 ## Runbook for future engineering passes
 
@@ -126,8 +143,8 @@ At the start of each pass:
 4. Pick the highest-value incomplete item from the priority sequence.
 5. Make changes on a safe branch/PR when appropriate.
 6. Re-run or inspect CI after changes and merge only green work when safe.
-7. Update this file when the architectural state, guarantees, or next priority materially changes.
+7. Update this file when the architectural state, guarantees, analytical grain, or next priority materially changes.
 
 ## Next highest-value task
 
-Merge the protected v1 operator snapshot only after the full PostgreSQL CI path is green, then implement a validated AtlasPay API source in Nexus with explicit unavailable-state rendering and no silent fallback to fixtures. After that, select a concrete ISO 20022 card-message family/version for XML/XSD boundary validation and add structured audit logging/security evidence.
+Persist a privacy-conscious authorization/network fact source that records event time, route identifier, disposition, latency, timeout/late classification, and reversal linkage without PAN, DE55, or other sensitive payloads. Use that durable source to extend both the AtlasPay operator contract and the analytics warehouse with real authorization/issuer metrics. In parallel, keep concrete ISO 20022 XML/XSD validation and structured audit logging as the next protocol/security slices.
