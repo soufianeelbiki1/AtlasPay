@@ -27,6 +27,7 @@ As of 2026-08-30, the repository already contains:
 - Canonical-model issuer/acquirer routing with longest-prefix selection, currency eligibility, and explicit ambiguity rejection.
 - One-to-one original/reversal network correlation linkage with explicit reasons and no external-delivery claim.
 - Strict EMV BER-TLV decoding for DE55 with constructed-template recursion, duplicate preservation, bounded nesting/length parsing, known-tag metadata, and explainable five-byte TVR decoding.
+- Explicit byte-oriented network transport port plus ISO 8583 adapter boundary; transport timeouts preserve ambiguous external-delivery status, while malformed responses fail at the adapter boundary.
 - Unit/property-oriented tests, PostgreSQL concurrency/integration tests, and GitHub Actions CI.
 - ADR documentation for delivery semantics, ledger invariants, transactional outbox guarantees, and failure boundaries.
 
@@ -72,7 +73,7 @@ PostgreSQL payment/idempotency persistence is implemented. The in-memory adapter
 
 - [x] Add transport-independent STAN/RRN transaction coordination with explicit timeout, late-response, duplicate, and mismatch outcomes.
 - [x] Add issuer/acquirer routing and one-to-one reversal correlation linkage.
-- [ ] Add explicit network adapters instead of embedding framing/network behavior in the core ISO 8583 codec.
+- [x] Add explicit network adapters instead of embedding framing/network behavior in the core ISO 8583 codec.
 - [x] Expand DE55 BER-TLV parsing, EMV tag dictionaries, and TVR decoding.
 
 ### 5. Interoperability
@@ -108,4 +109,4 @@ At the start of each pass:
 
 ## Next highest-value task
 
-Add explicit network adapter boundaries for request send/receive behavior, then integrate issuer timeout/reversal flows across routing, transport, and the coordinator. Keep ISO 8583 framing, EMV interpretation, transport delivery, routing, and business lifecycle responsibilities separate.
+Integrate issuer timeout/reversal flows across routing, transport, and the coordinator, including explicit late-response behavior after a timeout-triggered reversal. Keep ISO 8583 framing, EMV interpretation, transport delivery, routing, and business lifecycle responsibilities separate.
