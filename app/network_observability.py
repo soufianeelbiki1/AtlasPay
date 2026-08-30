@@ -79,9 +79,7 @@ class NetworkTelemetry:
         self._attempts.labels(route=route.name, issuer=route.issuer_id).inc()
         started = perf_counter()
         carrier = ExchangeObservation()
-        with self._tracer.start_as_current_span(
-            "atlaspay.authorization.network_exchange"
-        ) as span:
+        with self._tracer.start_as_current_span("atlaspay.authorization.network_exchange") as span:
             carrier.span = span
             span.set_attribute("atlaspay.route", route.name)
             span.set_attribute("atlaspay.issuer", route.issuer_id)
@@ -128,9 +126,7 @@ class NetworkTelemetry:
     ) -> None:
         """Record asynchronous late/duplicate response classification."""
 
-        with self._tracer.start_as_current_span(
-            "atlaspay.authorization.late_response"
-        ) as span:
+        with self._tracer.start_as_current_span("atlaspay.authorization.late_response") as span:
             span.set_attribute("atlaspay.route", route.name)
             span.set_attribute("atlaspay.issuer", route.issuer_id)
             span.set_attribute("atlaspay.disposition", disposition.value)
