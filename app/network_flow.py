@@ -7,6 +7,7 @@ from app.canonical import AuthorizationRequest, NetworkCorrelation
 from app.iso8583 import ISO8583Message
 from app.iso8583_adapter import correlation_key
 from app.network_coordinator import NetworkTransactionCoordinator, TransactionDisposition
+from app.network_observability import NetworkTelemetry
 from app.network_routing import (
     IssuerRoute,
     NetworkRouter,
@@ -59,12 +60,14 @@ class AuthorizationNetworkFlow:
         coordinator: NetworkTransactionCoordinator,
         reversals: ReversalRegistry,
         reversal_correlations: ReversalCorrelationProvider,
+        telemetry: NetworkTelemetry | None = None,
     ) -> None:
         self._router = router
         self._adapter = adapter
         self._coordinator = coordinator
         self._reversals = reversals
         self._reversal_correlations = reversal_correlations
+        self._telemetry = telemetry
 
     def start(
         self,
@@ -94,6 +97,24 @@ class AuthorizationNetworkFlow:
         )
 
     def exchange(
+        self,
+        attempt: NetworkAttempt,
+        *,
+        completed_at: float,
+    ) -> NetworkFlowResult:
+        if self._telemetry is None:
+            return self._exchange(attempt, completed_at=completed_at)
+
+        with self._telemetry.observe_exchange(attempt.route) as observation:
+            result = self._exchange(attempt, completed_at=completed_at)
+            observation.transport_outcome = result.transport_outcome
+            observation.disposition = result.disposition
+            observation.delivery_unknown = result.delivery_unknown
+            if result.reversal is not None:
+                observation.reversal_reason = result.reversal.reason
+            return result
+
+    def _exchange(
         self,
         attempt: NetworkAttempt,
         *,
@@ -167,8 +188,11 @@ class AuthorizationNetworkFlow:
     ) -> TransactionDisposition:
         """Apply an asynchronously received response after a prior exchange outcome."""
 
-        return self._coordinator.handle_response(
+        disposition = self._coordinator.handle_response(
             attempt.request,
             response,
             now=now,
         )
+        if self._telemetry is not None:
+            self._telemetry.record_late_response(attempt.route, disposition)
+        return disposition
