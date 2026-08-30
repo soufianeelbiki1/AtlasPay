@@ -15,10 +15,13 @@ As of 2026-08-30, the repository already contains:
 - Protocol-independent canonical authorization models.
 - ISO 8583 mapping plus MTI/STAN/RRN correlation groundwork.
 - Versioned SQL migrations with checksum drift detection and a PostgreSQL advisory migration lock.
-- Unit/property-oriented tests, PostgreSQL concurrency tests, and GitHub Actions CI.
-- ADR documentation for delivery semantics and failure boundaries.
+- Append-only PostgreSQL double-entry ledger with balanced/currency invariants.
+- Atomic PostgreSQL capture/refund/reversal operations that update payment state and post a ledger journal in the same transaction.
+- Replay-safe operation idempotency using request fingerprints, a durable unique key, and a PostgreSQL advisory transaction lock.
+- Unit/property-oriented tests, PostgreSQL concurrency/integration tests, and GitHub Actions CI.
+- ADR documentation for delivery semantics, ledger invariants, and failure boundaries.
 
-PostgreSQL payment/idempotency persistence is implemented. The in-memory adapter remains for isolated use. Schema ownership is explicit: migrations run separately from repository construction, are serialized with a PostgreSQL advisory lock, and reject checksum drift for already-applied versions. No production deployment or live payment-network integration should be claimed unless independently verified.
+PostgreSQL payment/idempotency persistence is implemented. The in-memory adapter remains for isolated use. Schema ownership is explicit: migrations run separately from repository construction, are serialized with a PostgreSQL advisory lock, and reject checksum drift for already-applied versions. Payment operation atomicity currently covers database-local state and ledger mutation only; no exactly-once guarantee is claimed across external systems. No production deployment or live payment-network integration should be claimed unless independently verified.
 
 ## Engineering invariants
 
@@ -39,15 +42,15 @@ PostgreSQL payment/idempotency persistence is implemented. The in-memory adapter
 - [x] Add explicit versioned migrations with drift detection and deployment serialization.
 - [x] Add durable idempotency records with unique constraints and request fingerprinting.
 - [x] Add cross-worker concurrency tests for duplicate/replayed requests.
-- [ ] Enforce payment state transitions in the domain and database-facing service layer.
+- [x] Enforce capture/refund/reversal payment state transitions in the PostgreSQL operation layer.
 
 ### 2. Double-entry ledger
 
 - [x] Add accounts, journal transactions, and immutable debit/credit entries.
 - [x] Enforce balanced transactions and currency consistency in PostgreSQL.
 - [x] Add invariant and property tests for append-only, zero-sum, and currency behavior.
-- [ ] Make capture/refund/reversal flows post ledger entries atomically with business state.
-- [ ] Add replay-safe posting/idempotency semantics for business-operation linkage.
+- [x] Make capture/refund/reversal flows post ledger entries atomically with business state.
+- [x] Add replay-safe posting/idempotency semantics for business-operation linkage.
 
 ### 3. Transactional outbox and event delivery
 
@@ -95,4 +98,4 @@ At the start of each pass:
 
 ## Next highest-value task
 
-Integrate payment capture/refund/reversal state changes with ledger posting inside one PostgreSQL transaction boundary. Add an operation-level idempotency key so replay cannot create duplicate journals.
+Add a transactional outbox so capture/refund/reversal domain events are persisted in the same PostgreSQL transaction as the payment state and ledger journal. Then add a replay-safe publisher/consumer example with explicit at-least-once semantics and poison-message handling.
