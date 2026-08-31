@@ -53,3 +53,17 @@ jobs:
 
       - name: Test
         run: pytest -q
+
+  container:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build runtime image
+        run: docker build --tag atlaspay:ci .
+
+      - name: Verify non-root runtime user
+        run: test "$(docker image inspect atlaspay:ci --format '{{.Config.User}}')" = "atlaspay"
