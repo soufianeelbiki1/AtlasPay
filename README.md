@@ -4,9 +4,16 @@ AtlasPay is a payment-processing reference system built around failure handling,
 
 It is a simulation: it does not connect to a live card network or process real money.
 
+## Java authorization boundary
+
+The `java-service/` module is a Java 21 / Spring Boot 3 authorization boundary beside the Python API. It validates requests, persists an authorization decision and `authorization.decided` outbox event in one PostgreSQL transaction, and uses a unique Idempotency-Key constraint to make retries return the original decision. It exposes Actuator health and Prometheus-compatible metrics and includes a non-root container image plus a dedicated Maven CI workflow. Event delivery is at-least-once; no cross-system exactly-once claim is made.
+
+Run it with PostgreSQL using `mvn -f java-service/pom.xml spring-boot:run`. This simulation deterministically declines amounts above 1,000,000 minor units; it is not an issuer integration.
+
 ## Main components
 
 - FastAPI payment lifecycle API.
+- Java 21/Spring Boot authorization boundary with PostgreSQL and transactional outbox.
 - PostgreSQL persistence with request fingerprints, unique constraints and advisory locks for durable idempotency.
 - Append-only double-entry ledger with balanced and currency-consistency checks.
 - Atomic capture, refund and reversal operations that persist state, ledger entries and outbox events in one database transaction.
@@ -29,37 +36,9 @@ AtlasPay exposes a protected read-only operator snapshot for Nexus. Payment, led
 
 Prometheus metrics and OpenTelemetry spans use low-cardinality labels and exclude PAN, STAN, RRN, DE55 and transaction identifiers.
 
-## Local network demo
-
-After migrating a local PostgreSQL database, run deterministic network scenarios:
-
-```bash
-export DATABASE_URL=postgresql://atlaspay:atlaspay@localhost:5432/atlaspay
-python -m app.migrations
-python -m app.demo_network --reset
-```
-
-The runner records four observations: an accepted response, an ambiguous timeout that creates reversal correlation, the late original response, and a known-local transport failure. It prints the same operational snapshot contract that Nexus consumes.
-
-To expose that snapshot through the API:
-
-```bash
-export ATLASPAY_OPS_TOKEN=local-demo-token
-uvicorn app.main:app --reload
-```
-
-Then configure Nexus with the AtlasPay base URL and the same token. The demo runner is intended for a local migrated database; `--reset` deletes existing network observations before inserting the deterministic scenarios.
-
 ## Analytics
 
-`analytics/` contains PostgreSQL marts for:
-
-- daily payment KPIs by currency;
-- capture/refund/reversal lifecycle timing;
-- outbox delivery reliability;
-- daily debit/credit ledger controls.
-
-The queries run against the migrated schema in CI. Current payment status is treated as current state, not as a historical authorization funnel, and monetary KPIs are never combined across currencies.
+`analytics/` contains PostgreSQL marts for daily payment KPIs, lifecycle timing, outbox delivery reliability and ledger controls. Queries run against the migrated schema in CI and never combine monetary KPIs across currencies.
 
 ## Run locally
 
@@ -67,39 +46,21 @@ The queries run against the migrated schema in CI. Current payment status is tre
 git clone https://github.com/soufianeelbiki1/AtlasPay.git
 cd AtlasPay
 python -m venv .venv
-source .venv/bin/activate  # Windows: .venv\Scripts\activate
+source .venv/bin/activate
 pip install -e ".[dev]"
 export DATABASE_URL=postgresql://atlaspay:atlaspay@localhost:5432/atlaspay
 python -m app.migrations
 uvicorn app.main:app --reload
+mvn -f java-service/pom.xml spring-boot:run
 ```
 
-Open `http://localhost:8000/docs` for the API documentation.
-
-## Tests
-
-```bash
-ruff check .
-ruff format --check .
-python -m compileall app tests
-pytest
-```
-
-GitHub Actions provisions PostgreSQL and covers migrations, concurrency, persistence, reconciliation, network observation persistence, the deterministic network demo, operator aggregation and analytics SQL.
+Open `http://localhost:8000/docs` for the Python API and `http://localhost:8080/actuator/health` for the Java readiness endpoint.
 
 ## Current limitations
 
-- Network observations record operational metadata, not card/network payloads; they are not a historical ISO 8583 message archive.
-- Network headers, TPDU framing, packed BCD profiles and scheme-specific transports are outside the current ISO 8583 codec.
+- No verified live deployment or payment-network integration.
+- Network observations record operational metadata, not a historical ISO 8583 message archive.
 - The ISO 20022 adapter does not yet validate a concrete card-message XSD.
-- There is no verified live deployment or payment-network integration.
-
-## Roadmap
-
-1. Add per-route network aggregates and durable authorization facts suitable for deeper issuer analytics.
-2. Add a concrete ISO 20022 message family with XML/XSD validation.
-3. Add structured audit logging and reproducible performance tests.
-4. Package AtlasPay and Nexus into a simpler local multi-service demo.
 
 Architecture decisions and guarantee details are documented under `docs/adr/`.
 

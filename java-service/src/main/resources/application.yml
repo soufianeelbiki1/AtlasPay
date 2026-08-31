@@ -1,0 +1,13 @@
+spring:
+  datasource:
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/atlaspay}
+    username: ${DB_USER:atlaspay}
+    password: ${DB_PASSWORD:atlaspay}
+  sql:
+    init:
+      mode: always
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus

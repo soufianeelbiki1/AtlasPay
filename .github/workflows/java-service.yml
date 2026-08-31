@@ -1,0 +1,26 @@
+name: Java authorization service
+on:
+  pull_request:
+    paths: ["java-service/**", ".github/workflows/java-service.yml"]
+  push:
+    branches: [main]
+    paths: ["java-service/**", ".github/workflows/java-service.yml"]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env: { POSTGRES_DB: atlaspay, POSTGRES_USER: atlaspay, POSTGRES_PASSWORD: atlaspay }
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd="pg_isready -U atlaspay -d atlaspay"
+          --health-interval=5s --health-timeout=5s --health-retries=10
+    defaults: { run: { working-directory: java-service } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: "21", cache: maven }
+      - run: mvn -B test
