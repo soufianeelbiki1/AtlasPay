@@ -1,0 +1,77 @@
+name: Security checks
+
+on:
+  pull_request:
+    paths:
+      - "pyproject.toml"
+      - "app/**"
+      - "Dockerfile"
+      - ".github/workflows/security.yml"
+  push:
+    branches: [main]
+    paths:
+      - "pyproject.toml"
+      - "app/**"
+      - "Dockerfile"
+      - ".github/workflows/security.yml"
+  schedule:
+    - cron: "17 5 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  dependency-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install application and audit tool
+        run: python -m pip install . pip-audit
+
+      - name: Verify installed dependency consistency
+        run: python -m pip check
+
+      - name: Audit known dependency vulnerabilities
+        run: python -m pip_audit
+
+  runtime-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build runtime image
+        run: docker build --tag atlaspay:security .
+
+      - name: Verify runtime user
+        run: test "$(docker image inspect atlaspay:security --format '{{.Config.User}}')" = "atlaspay"
+
+      - name: Start runtime image
+        run: docker run --rm -d --name atlaspay-security -p 18000:8000 atlaspay:security
+
+      - name: Verify health endpoint
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:18000/health >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          docker logs atlaspay-security
+          exit 1
+
+      - name: Stop runtime image
+        if: always()
+        run: docker stop atlaspay-security || true
