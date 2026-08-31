@@ -14,6 +14,7 @@ import org.springframework.batch.item.database.JdbcCursorItemReader;
 import org.springframework.batch.item.database.builder.JdbcBatchItemWriterBuilder;
 import org.springframework.batch.item.database.builder.JdbcCursorItemReaderBuilder;
 import org.springframework.context.annotation.Bean;
+import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.transaction.PlatformTransactionManager;
 
@@ -43,7 +44,10 @@ public class ReconciliationBatchConfiguration {
   JdbcBatchItemWriter<ReconciliationResult> reconciliationWriter(DataSource dataSource) {
     return new JdbcBatchItemWriterBuilder<ReconciliationResult>().dataSource(dataSource)
       .sql("insert into reconciliation_results(item_id,payment_id,match_status,delta_minor,processed_at) values (:itemId,:paymentId,:matchStatus,:deltaMinor,:processedAt) on conflict (item_id) do update set match_status=excluded.match_status,delta_minor=excluded.delta_minor,processed_at=excluded.processed_at")
-      .beanMapped().build();
+      .itemSqlParameterSourceProvider(item -> new MapSqlParameterSource()
+        .addValue("itemId", item.itemId()).addValue("paymentId", item.paymentId())
+        .addValue("matchStatus", item.matchStatus()).addValue("deltaMinor", item.deltaMinor())
+        .addValue("processedAt", item.processedAt())).build();
   }
 
   @Bean
