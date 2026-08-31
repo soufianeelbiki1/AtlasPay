@@ -1,5 +1,9 @@
 # AtlasPay authorization service
 
-This Java 21/Spring Boot 3 module owns a narrow authorization boundary beside the existing Python payment API. It persists decisions and an outbox event in one PostgreSQL transaction. Repeated Idempotency-Key values return the original decision; external delivery remains at-least-once and consumers must be idempotent.
+Java 21 / Spring Boot 3 service for the narrow authorization boundary.
 
-Run locally with PostgreSQL and DATABASE_URL, then mvn spring-boot:run. GET /actuator/health is the readiness signal. Amounts above 1,000,000 minor units are deterministically declined for the simulation; this is not an issuer or card-network integration.
+## Reconciliation batch
+
+POST /reconciliation/runs launches a restartable Spring Batch job. It reads unprocessed reconciliation_items in chunks of 100 and upserts results into reconciliation_results. Spring Batch metadata in PostgreSQL provides restartability; rerunning a completed item is idempotent because the result key is the item UUID. The job uses at-least-once processing: a crash after writing a result but before marking the source row processed can cause a re-read, which is safe due to the upsert key. Match status is deliberately limited to MATCHED/MISMATCH; settlement policy remains outside this component.
+
+The service exposes Actuator health and Prometheus metrics. Configure DATABASE_URL, DB_USER, and DB_PASSWORD for PostgreSQL.
