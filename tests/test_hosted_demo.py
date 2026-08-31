@@ -44,7 +44,9 @@ def test_demo_seed_is_skipped_when_observations_exist() -> None:
 
 def test_bootstrap_reuses_migration_runner_before_seed() -> None:
     with (
-        patch("app.hosted_demo.migrate_database", return_value=["005_network_observations"]) as migrate,
+        patch(
+            "app.hosted_demo.migrate_database", return_value=["005_network_observations"]
+        ) as migrate,
         patch("app.hosted_demo.ensure_demo_seeded", return_value=True) as seed,
     ):
         applied, seeded = bootstrap_hosted_demo("postgresql://demo")
