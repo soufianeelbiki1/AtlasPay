@@ -1,9 +1,4 @@
-"""Read-only operational snapshot contract for operator/control-plane consumers.
-
-The contract reports only state AtlasPay can measure from its current runtime or
-durable database. Missing durable network telemetry is represented as unavailable,
-never as a fabricated zero-value metric.
-"""
+"""Read-only operational snapshot contract for operator/control-plane consumers."""
 
 from collections import Counter
 from dataclasses import dataclass
@@ -69,6 +64,11 @@ class OutboxSummary(BaseModel):
 
 class NetworkSummary(BaseModel):
     state: SectionState
+    observations: int | None = Field(default=None, ge=0)
+    by_disposition: dict[str, int] | None = None
+    timeouts: int | None = Field(default=None, ge=0)
+    late_responses: int | None = Field(default=None, ge=0)
+    p95_latency_ms: float | None = Field(default=None, ge=0)
     reason: str | None = None
 
 
@@ -96,6 +96,11 @@ class DatabaseMeasurements:
     unpublished_outbox: int
     poison_outbox: int
     oldest_unpublished_age_seconds: float
+    network_observations: int
+    network_disposition_counts: dict[str, int]
+    network_timeouts: int
+    network_late_responses: int
+    network_p95_latency_ms: float
 
 
 class PostgresOperationalSnapshotReader:
@@ -143,6 +148,34 @@ class PostgresOperationalSnapshotReader:
             )
             unpublished, poison, oldest_age = cursor.fetchone()
 
+            cursor.execute(
+                """
+                SELECT
+                    COUNT(*),
+                    COUNT(*) FILTER (WHERE transport_outcome = 'timeout'),
+                    COUNT(*) FILTER (WHERE disposition = 'late'),
+                    COALESCE(
+                        percentile_cont(0.95) WITHIN GROUP (ORDER BY latency_ms),
+                        0
+                    )
+                FROM network_observations
+                """
+            )
+            network_total, network_timeouts, network_late, network_p95 = cursor.fetchone()
+
+            cursor.execute(
+                """
+                SELECT disposition, COUNT(*)
+                FROM network_observations
+                WHERE disposition IS NOT NULL
+                GROUP BY disposition
+                ORDER BY disposition
+                """
+            )
+            network_dispositions = {
+                str(disposition): int(count) for disposition, count in cursor.fetchall()
+            }
+
         return DatabaseMeasurements(
             payment_total=payment_total,
             payment_status_counts=status_counts,
@@ -150,6 +183,11 @@ class PostgresOperationalSnapshotReader:
             unpublished_outbox=int(unpublished),
             poison_outbox=int(poison),
             oldest_unpublished_age_seconds=max(float(oldest_age), 0.0),
+            network_observations=int(network_total),
+            network_disposition_counts=network_dispositions,
+            network_timeouts=int(network_timeouts),
+            network_late_responses=int(network_late),
+            network_p95_latency_ms=max(float(network_p95), 0.0),
         )
 
     def read(self) -> OperationalSnapshot:
@@ -177,7 +215,7 @@ class PostgresOperationalSnapshotReader:
         return OperationalSnapshot(
             provenance=SnapshotProvenance(generated_at=generated_at),
             health=health,
-            data_state=DataState.PARTIAL,
+            data_state=DataState.FRESH,
             payments=PaymentSummary(
                 state=SectionState.AVAILABLE,
                 total=measurements.payment_total,
@@ -198,14 +236,15 @@ class PostgresOperationalSnapshotReader:
                 oldest_unpublished_age_seconds=measurements.oldest_unpublished_age_seconds,
             ),
             network=NetworkSummary(
-                state=SectionState.UNAVAILABLE,
-                reason=(
-                    "network metrics are process-local Prometheus/OpenTelemetry observations; "
-                    "no durable snapshot source is configured"
-                ),
+                state=SectionState.AVAILABLE,
+                observations=measurements.network_observations,
+                by_disposition=measurements.network_disposition_counts,
+                timeouts=measurements.network_timeouts,
+                late_responses=measurements.network_late_responses,
+                p95_latency_ms=measurements.network_p95_latency_ms,
             ),
             incidents=incidents,
-            missing_sections=["network"],
+            missing_sections=[],
         )
 
 
@@ -225,13 +264,7 @@ class UnavailableOperationalSnapshotReader:
             payments=PaymentSummary(state=SectionState.UNAVAILABLE, reason=unavailable),
             ledger=LedgerSummary(state=SectionState.UNAVAILABLE, reason=unavailable),
             outbox=OutboxSummary(state=SectionState.UNAVAILABLE, reason=unavailable),
-            network=NetworkSummary(
-                state=SectionState.UNAVAILABLE,
-                reason=(
-                    "network metrics are process-local Prometheus/OpenTelemetry observations; "
-                    "no durable snapshot source is configured"
-                ),
-            ),
+            network=NetworkSummary(state=SectionState.UNAVAILABLE, reason=unavailable),
             incidents=["durable operational database is unavailable"],
             missing_sections=["payments", "ledger", "outbox", "network"],
         )

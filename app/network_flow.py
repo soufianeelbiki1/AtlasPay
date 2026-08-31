@@ -7,6 +7,7 @@ from app.canonical import AuthorizationRequest, NetworkCorrelation
 from app.iso8583 import ISO8583Message
 from app.iso8583_adapter import correlation_key
 from app.network_coordinator import NetworkTransactionCoordinator, TransactionDisposition
+from app.network_history import NetworkObservation, NetworkObservationWriter
 from app.network_observability import NetworkTelemetry
 from app.network_routing import (
     IssuerRoute,
@@ -61,6 +62,7 @@ class AuthorizationNetworkFlow:
         reversals: ReversalRegistry,
         reversal_correlations: ReversalCorrelationProvider,
         telemetry: NetworkTelemetry | None = None,
+        history: NetworkObservationWriter | None = None,
     ) -> None:
         self._router = router
         self._adapter = adapter
@@ -68,6 +70,7 @@ class AuthorizationNetworkFlow:
         self._reversals = reversals
         self._reversal_correlations = reversal_correlations
         self._telemetry = telemetry
+        self._history = history
 
     def start(
         self,
@@ -103,16 +106,48 @@ class AuthorizationNetworkFlow:
         completed_at: float,
     ) -> NetworkFlowResult:
         if self._telemetry is None:
-            return self._exchange(attempt, completed_at=completed_at)
-
-        with self._telemetry.observe_exchange(attempt.route) as observation:
             result = self._exchange(attempt, completed_at=completed_at)
-            observation.transport_outcome = result.transport_outcome
-            observation.disposition = result.disposition
-            observation.delivery_unknown = result.delivery_unknown
-            if result.reversal is not None:
-                observation.reversal_reason = result.reversal.reason
-            return result
+        else:
+            with self._telemetry.observe_exchange(attempt.route) as observation:
+                result = self._exchange(attempt, completed_at=completed_at)
+                observation.transport_outcome = result.transport_outcome
+                observation.disposition = result.disposition
+                observation.delivery_unknown = result.delivery_unknown
+                if result.reversal is not None:
+                    observation.reversal_reason = result.reversal.reason
+
+        self._record(
+            attempt,
+            transport_outcome=result.transport_outcome,
+            disposition=result.disposition,
+            delivery_unknown=result.delivery_unknown,
+            completed_at=completed_at,
+            reversal_reason=result.reversal.reason if result.reversal is not None else None,
+        )
+        return result
+
+    def _record(
+        self,
+        attempt: NetworkAttempt,
+        *,
+        transport_outcome: TransportOutcome,
+        disposition: TransactionDisposition | None,
+        delivery_unknown: bool,
+        completed_at: float,
+        reversal_reason: ReversalReason | None = None,
+    ) -> None:
+        if self._history is None:
+            return
+        self._history.record(
+            NetworkObservation(
+                route=attempt.route,
+                transport_outcome=transport_outcome,
+                disposition=disposition,
+                delivery_unknown=delivery_unknown,
+                latency_ms=max((completed_at - attempt.started_at) * 1000.0, 0.0),
+                reversal_reason=reversal_reason,
+            )
+        )
 
     def _exchange(
         self,
@@ -195,4 +230,11 @@ class AuthorizationNetworkFlow:
         )
         if self._telemetry is not None:
             self._telemetry.record_late_response(attempt.route, disposition)
+        self._record(
+            attempt,
+            transport_outcome=TransportOutcome.RESPONSE,
+            disposition=disposition,
+            delivery_unknown=False,
+            completed_at=now,
+        )
         return disposition

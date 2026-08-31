@@ -35,6 +35,24 @@ class StaticSnapshotReader:
         return self._snapshot
 
 
+def measurements(**overrides: object) -> DatabaseMeasurements:
+    values: dict[str, object] = {
+        "payment_total": 1,
+        "payment_status_counts": {"pending": 1},
+        "operation_count": 0,
+        "unpublished_outbox": 0,
+        "poison_outbox": 0,
+        "oldest_unpublished_age_seconds": 0.0,
+        "network_observations": 4,
+        "network_disposition_counts": {"accepted": 2, "late": 1, "timed_out": 1},
+        "network_timeouts": 1,
+        "network_late_responses": 1,
+        "network_p95_latency_ms": 1800.0,
+    }
+    values.update(overrides)
+    return DatabaseMeasurements(**values)  # type: ignore[arg-type]
+
+
 def test_unavailable_reader_never_fabricates_zero_operational_metrics() -> None:
     snapshot = UnavailableOperationalSnapshotReader("database not configured").read()
 
@@ -45,12 +63,13 @@ def test_unavailable_reader_never_fabricates_zero_operational_metrics() -> None:
     assert snapshot.ledger.balanced is None
     assert snapshot.outbox.unpublished is None
     assert snapshot.network.state is SectionState.UNAVAILABLE
+    assert snapshot.network.observations is None
     assert snapshot.missing_sections == ["payments", "ledger", "outbox", "network"]
 
 
 def test_postgres_reader_classifies_reconciliation_and_poison_outbox_as_critical() -> None:
     reader = PostgresOperationalSnapshotReader("postgresql://unused")
-    reader._measure_database = lambda: DatabaseMeasurements(  # type: ignore[method-assign]
+    reader._measure_database = lambda: measurements(  # type: ignore[method-assign]
         payment_total=7,
         payment_status_counts={"captured": 5, "pending": 2},
         operation_count=5,
@@ -73,6 +92,7 @@ def test_postgres_reader_classifies_reconciliation_and_poison_outbox_as_critical
     snapshot = reader.read()
 
     assert snapshot.health is SnapshotHealth.CRITICAL
+    assert snapshot.data_state is DataState.FRESH
     assert snapshot.payments.total == 7
     assert snapshot.payments.by_status == {"captured": 5, "pending": 2}
     assert snapshot.ledger.balanced is False
@@ -80,19 +100,19 @@ def test_postgres_reader_classifies_reconciliation_and_poison_outbox_as_critical
     assert snapshot.ledger.discrepancy_kinds == {"journal_unbalanced": 1}
     assert snapshot.outbox.unpublished == 3
     assert snapshot.outbox.poison_messages == 1
-    assert snapshot.network.state is SectionState.UNAVAILABLE
-    assert snapshot.missing_sections == ["network"]
+    assert snapshot.network.state is SectionState.AVAILABLE
+    assert snapshot.network.observations == 4
+    assert snapshot.network.timeouts == 1
+    assert snapshot.network.late_responses == 1
+    assert snapshot.network.p95_latency_ms == 1800.0
+    assert snapshot.missing_sections == []
     assert len(snapshot.incidents) == 2
 
 
 def test_postgres_reader_marks_plain_unpublished_backlog_degraded() -> None:
     reader = PostgresOperationalSnapshotReader("postgresql://unused")
-    reader._measure_database = lambda: DatabaseMeasurements(  # type: ignore[method-assign]
-        payment_total=1,
-        payment_status_counts={"pending": 1},
-        operation_count=0,
+    reader._measure_database = lambda: measurements(  # type: ignore[method-assign]
         unpublished_outbox=2,
-        poison_outbox=0,
         oldest_unpublished_age_seconds=3.0,
     )
     reader._reconciler = StaticReconciler(ReconciliationReport(()))  # type: ignore[assignment]
@@ -101,6 +121,7 @@ def test_postgres_reader_marks_plain_unpublished_backlog_degraded() -> None:
 
     assert snapshot.health is SnapshotHealth.DEGRADED
     assert snapshot.ledger.balanced is True
+    assert snapshot.network.by_disposition == {"accepted": 2, "late": 1, "timed_out": 1}
     assert snapshot.incidents == []
 
 

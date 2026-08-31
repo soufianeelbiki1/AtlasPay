@@ -19,13 +19,36 @@ The ISO 8583 codec supports primary/secondary bitmaps plus fixed, LLVAR and LLLV
 
 Authorization messages map into a canonical model before routing or ISO 20022 projection. The network layer models accepted responses, correlation mismatches, duplicates, local failures, ambiguous timeouts and late responses. A timeout can trigger reversal correlation, but the code does not assume that a remote system failed simply because the local deadline expired.
 
+Network observations can be persisted to PostgreSQL without storing PAN, STAN, RRN, DE55 or message payloads. The operator snapshot aggregates observation count, dispositions, timeout/late-response counts and p95 elapsed time from that durable source.
+
 The current ISO 20022 work is a scoped authorization projection. It is not a general XML/XSD implementation or a certification claim.
 
 ## Operations and observability
 
-AtlasPay exposes a protected read-only operator snapshot for Nexus. Durable payment, ledger, reconciliation and outbox values come from PostgreSQL. Network metrics that are not persisted are reported as unavailable rather than converted to zero.
+AtlasPay exposes a protected read-only operator snapshot for Nexus. Payment, ledger, reconciliation, outbox and network summaries come from PostgreSQL when `DATABASE_URL` is configured.
 
 Prometheus metrics and OpenTelemetry spans use low-cardinality labels and exclude PAN, STAN, RRN, DE55 and transaction identifiers.
+
+## Local network demo
+
+After migrating a local PostgreSQL database, run deterministic network scenarios:
+
+```bash
+export DATABASE_URL=postgresql://atlaspay:atlaspay@localhost:5432/atlaspay
+python -m app.migrations
+python -m app.demo_network --reset
+```
+
+The runner records four observations: an accepted response, an ambiguous timeout that creates reversal correlation, the late original response, and a known-local transport failure. It prints the same operational snapshot contract that Nexus consumes.
+
+To expose that snapshot through the API:
+
+```bash
+export ATLASPAY_OPS_TOKEN=local-demo-token
+uvicorn app.main:app --reload
+```
+
+Then configure Nexus with the AtlasPay base URL and the same token. The demo runner is intended for a local migrated database; `--reset` deletes existing network observations before inserting the deterministic scenarios.
 
 ## Analytics
 
@@ -62,21 +85,21 @@ python -m compileall app tests
 pytest
 ```
 
-GitHub Actions provisions PostgreSQL and covers migrations, concurrency, persistence, reconciliation, operator aggregation and analytics SQL.
+GitHub Actions provisions PostgreSQL and covers migrations, concurrency, persistence, reconciliation, network observation persistence, the deterministic network demo, operator aggregation and analytics SQL.
 
 ## Current limitations
 
-- Authorization/network observations are process-local, so historical issuer latency and authorization-rate analytics are not exposed as durable metrics yet.
+- Network observations record operational metadata, not card/network payloads; they are not a historical ISO 8583 message archive.
 - Network headers, TPDU framing, packed BCD profiles and scheme-specific transports are outside the current ISO 8583 codec.
 - The ISO 20022 adapter does not yet validate a concrete card-message XSD.
 - There is no verified live deployment or payment-network integration.
 
 ## Roadmap
 
-1. Persist privacy-conscious authorization/network observations for historical operations and analytics.
+1. Add per-route network aggregates and durable authorization facts suitable for deeper issuer analytics.
 2. Add a concrete ISO 20022 message family with XML/XSD validation.
 3. Add structured audit logging and reproducible performance tests.
-4. Build a one-command AtlasPay + Nexus demo with timeout, duplicate and reversal scenarios.
+4. Package AtlasPay and Nexus into a simpler local multi-service demo.
 
 Architecture decisions and guarantee details are documented under `docs/adr/`.
 
