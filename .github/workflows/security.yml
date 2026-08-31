@@ -34,6 +34,9 @@ jobs:
           python-version: "3.11"
           cache: pip
 
+      - name: Upgrade audited packaging tools
+        run: python -m pip install --upgrade "setuptools>=83" wheel
+
       - name: Install application and audit tool
         run: python -m pip install . pip-audit
 
