@@ -1,7 +1,7 @@
 package com.atlaspay;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.mockito.Mockito.verify;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.env.MockEnvironment;
@@ -20,7 +20,7 @@ class InternalServiceAuthFilterTest {
     filter.doFilter(request, response, chain);
 
     assertEquals(503, response.getStatus());
-    assertEquals(0, chain.getRequest().getRequestURI().length());
+    assertNull(chain.getRequest());
   }
 
   @Test
@@ -37,6 +37,7 @@ class InternalServiceAuthFilterTest {
 
     assertEquals(401, response.getStatus());
     assertEquals("Bearer", response.getHeader("WWW-Authenticate"));
+    assertNull(chain.getRequest());
   }
 
   @Test
@@ -51,7 +52,7 @@ class InternalServiceAuthFilterTest {
 
     filter.doFilter(request, response, chain);
 
-    verify(chain.getRequest()).getRequestURI();
+    assertEquals("/v1/authorizations", chain.getRequest().getRequestURI());
   }
 
   @Test
@@ -64,5 +65,6 @@ class InternalServiceAuthFilterTest {
     filter.doFilter(request, response, chain);
 
     assertEquals(200, response.getStatus());
+    assertEquals("/actuator/health", chain.getRequest().getRequestURI());
   }
 }
