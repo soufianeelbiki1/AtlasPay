@@ -1,16 +1,20 @@
+server:
+  port: ${PORT:8080}
+
 spring:
   datasource:
-    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/atlaspay}
-    username: ${DB_USER:atlaspay}
-    password: ${DB_PASSWORD:atlaspay}
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/atlaspay}
+    username: ${SPRING_DATASOURCE_USERNAME:${DB_USER:atlaspay}}
+    password: ${SPRING_DATASOURCE_PASSWORD:${DB_PASSWORD:atlaspay}}
   sql:
     init:
-      mode: always
+      mode: ${SPRING_SQL_INIT_MODE:always}
   batch:
     job:
       enabled: false
     jdbc:
-      initialize-schema: always
+      initialize-schema: ${SPRING_BATCH_JDBC_INITIALIZE_SCHEMA:always}
+
 management:
   endpoints:
     web:
