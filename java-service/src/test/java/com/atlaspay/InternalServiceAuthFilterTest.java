@@ -3,6 +3,7 @@ package com.atlaspay;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
+import jakarta.servlet.http.HttpServletRequest;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.env.MockEnvironment;
 import org.springframework.mock.web.MockFilterChain;
@@ -52,7 +53,8 @@ class InternalServiceAuthFilterTest {
 
     filter.doFilter(request, response, chain);
 
-    assertEquals("/v1/authorizations", chain.getRequest().getRequestURI());
+    var forwarded = (HttpServletRequest) chain.getRequest();
+    assertEquals("/v1/authorizations", forwarded.getRequestURI());
   }
 
   @Test
@@ -64,7 +66,8 @@ class InternalServiceAuthFilterTest {
 
     filter.doFilter(request, response, chain);
 
+    var forwarded = (HttpServletRequest) chain.getRequest();
     assertEquals(200, response.getStatus());
-    assertEquals("/actuator/health", chain.getRequest().getRequestURI());
+    assertEquals("/actuator/health", forwarded.getRequestURI());
   }
 }
