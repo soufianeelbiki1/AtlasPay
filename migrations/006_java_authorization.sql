@@ -1,6 +1,3 @@
--- Java-specific tables are owned by the root migration runner.
--- The outbox_events table is shared with the Python service and is created by
--- migrations/004_transactional_outbox.sql.
 CREATE TABLE IF NOT EXISTS authorization_decisions (
     decision_id UUID PRIMARY KEY,
     idempotency_key VARCHAR(128) NOT NULL UNIQUE,
