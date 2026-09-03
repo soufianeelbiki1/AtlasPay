@@ -1,6 +1,7 @@
 """Property-based invariants for the ISO 8583 profile codec."""
 
-from hypothesis import given, strategies as st
+from hypothesis import given
+from hypothesis import strategies as st
 
 from app.iso8583 import ISO8583Codec, ISO8583Message
 
