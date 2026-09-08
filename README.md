@@ -26,7 +26,7 @@ The ISO 8583 codec supports primary/secondary bitmaps plus fixed, LLVAR and LLLV
 
 Authorization messages map into a canonical model before routing or ISO 20022 projection. The network layer models accepted responses, correlation mismatches, duplicates, local failures, ambiguous timeouts and late responses. A timeout can trigger reversal correlation, but the code does not assume that a remote system failed simply because the local deadline expired.
 
-Network observations can be persisted to PostgreSQL without storing PAN, STAN, RRN, DE55 or message payloads. The operator snapshot aggregates observation count, dispositions, timeout/late-response counts and p95 elapsed time from that durable source.
+Network observations can be persisted to PostgreSQL without storing PAN, STAN, RRN, DE55 or message payloads. The operator snapshot aggregates observation count, dispositions, timeout/late-response counts and p95 elapsed time from that durable source. It also groups safe operational facts by route, issuer and acquirer so Nexus can expose latency and delivery-unknown hotspots without leaking transaction identifiers or message contents.
 
 The current ISO 20022 work is a scoped authorization projection. It is not a general XML/XSD implementation or a certification claim.
 
@@ -58,7 +58,7 @@ Open `http://localhost:8000/docs` for the Python API and `http://localhost:8080/
 
 ## Current limitations
 
-- No verified live deployment or payment-network integration.
+- The verified Railway deployment is a deterministic simulation; there is no live payment-network integration.
 - Network observations record operational metadata, not a historical ISO 8583 message archive.
 - The ISO 20022 adapter does not yet validate a concrete card-message XSD.
 

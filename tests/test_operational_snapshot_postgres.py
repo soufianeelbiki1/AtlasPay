@@ -72,4 +72,16 @@ def test_snapshot_measures_real_postgres_payment_poison_outbox_and_network_state
     assert snapshot.network.timeouts is not None and snapshot.network.timeouts >= 1
     assert snapshot.network.by_disposition is not None
     assert snapshot.network.by_disposition.get("timed_out", 0) >= 1
+    assert snapshot.network.routes is not None
+    route = next(
+        item
+        for item in snapshot.network.routes
+        if item.route_name == "issuer-a"
+        and item.issuer_id == "issuer-bank-a"
+        and item.acquirer_id == "atlas-acquirer"
+    )
+    assert route.observations >= 1
+    assert route.timeouts >= 1
+    assert route.delivery_unknown >= 1
+    assert route.p95_latency_ms >= 0
     assert snapshot.missing_sections == []

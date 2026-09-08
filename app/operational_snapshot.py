@@ -62,6 +62,18 @@ class OutboxSummary(BaseModel):
     reason: str | None = None
 
 
+class RouteNetworkSummary(BaseModel):
+    route_name: str
+    issuer_id: str
+    acquirer_id: str
+    observations: int = Field(ge=0)
+    accepted: int = Field(ge=0)
+    timeouts: int = Field(ge=0)
+    late_responses: int = Field(ge=0)
+    delivery_unknown: int = Field(ge=0)
+    p95_latency_ms: float = Field(ge=0)
+
+
 class NetworkSummary(BaseModel):
     state: SectionState
     observations: int | None = Field(default=None, ge=0)
@@ -69,6 +81,7 @@ class NetworkSummary(BaseModel):
     timeouts: int | None = Field(default=None, ge=0)
     late_responses: int | None = Field(default=None, ge=0)
     p95_latency_ms: float | None = Field(default=None, ge=0)
+    routes: list[RouteNetworkSummary] | None = None
     reason: str | None = None
 
 
@@ -101,6 +114,7 @@ class DatabaseMeasurements:
     network_timeouts: int
     network_late_responses: int
     network_p95_latency_ms: float
+    network_routes: list[RouteNetworkSummary]
 
 
 class PostgresOperationalSnapshotReader:
@@ -176,6 +190,51 @@ class PostgresOperationalSnapshotReader:
                 str(disposition): int(count) for disposition, count in cursor.fetchall()
             }
 
+            cursor.execute(
+                """
+                SELECT
+                    route_name,
+                    issuer_id,
+                    acquirer_id,
+                    COUNT(*),
+                    COUNT(*) FILTER (WHERE disposition = 'accepted'),
+                    COUNT(*) FILTER (WHERE transport_outcome = 'timeout'),
+                    COUNT(*) FILTER (WHERE disposition = 'late'),
+                    COUNT(*) FILTER (WHERE delivery_unknown),
+                    COALESCE(
+                        percentile_cont(0.95) WITHIN GROUP (ORDER BY latency_ms),
+                        0
+                    )
+                FROM network_observations
+                GROUP BY route_name, issuer_id, acquirer_id
+                ORDER BY route_name, issuer_id, acquirer_id
+                """
+            )
+            network_routes = [
+                RouteNetworkSummary(
+                    route_name=str(route_name),
+                    issuer_id=str(issuer_id),
+                    acquirer_id=str(acquirer_id),
+                    observations=int(observations),
+                    accepted=int(accepted),
+                    timeouts=int(timeouts),
+                    late_responses=int(late_responses),
+                    delivery_unknown=int(delivery_unknown),
+                    p95_latency_ms=max(float(p95_latency_ms), 0.0),
+                )
+                for (
+                    route_name,
+                    issuer_id,
+                    acquirer_id,
+                    observations,
+                    accepted,
+                    timeouts,
+                    late_responses,
+                    delivery_unknown,
+                    p95_latency_ms,
+                ) in cursor.fetchall()
+            ]
+
         return DatabaseMeasurements(
             payment_total=payment_total,
             payment_status_counts=status_counts,
@@ -188,6 +247,7 @@ class PostgresOperationalSnapshotReader:
             network_timeouts=int(network_timeouts),
             network_late_responses=int(network_late),
             network_p95_latency_ms=max(float(network_p95), 0.0),
+            network_routes=network_routes,
         )
 
     def read(self) -> OperationalSnapshot:
@@ -242,6 +302,7 @@ class PostgresOperationalSnapshotReader:
                 timeouts=measurements.network_timeouts,
                 late_responses=measurements.network_late_responses,
                 p95_latency_ms=measurements.network_p95_latency_ms,
+                routes=measurements.network_routes,
             ),
             incidents=incidents,
             missing_sections=[],
