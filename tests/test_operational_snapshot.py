@@ -8,6 +8,7 @@ from app.operational_snapshot import (
     DataState,
     OperationalSnapshot,
     PostgresOperationalSnapshotReader,
+    RouteNetworkSummary,
     SectionState,
     SnapshotHealth,
     UnavailableOperationalSnapshotReader,
@@ -48,6 +49,19 @@ def measurements(**overrides: object) -> DatabaseMeasurements:
         "network_timeouts": 1,
         "network_late_responses": 1,
         "network_p95_latency_ms": 1800.0,
+        "network_routes": [
+            RouteNetworkSummary(
+                route_name="issuer-a",
+                issuer_id="issuer-bank-a",
+                acquirer_id="atlas-acquirer",
+                observations=4,
+                accepted=2,
+                timeouts=1,
+                late_responses=1,
+                delivery_unknown=1,
+                p95_latency_ms=1800.0,
+            )
+        ],
     }
     values.update(overrides)
     return DatabaseMeasurements(**values)  # type: ignore[arg-type]
@@ -64,6 +78,7 @@ def test_unavailable_reader_never_fabricates_zero_operational_metrics() -> None:
     assert snapshot.outbox.unpublished is None
     assert snapshot.network.state is SectionState.UNAVAILABLE
     assert snapshot.network.observations is None
+    assert snapshot.network.routes is None
     assert snapshot.missing_sections == ["payments", "ledger", "outbox", "network"]
 
 
@@ -105,6 +120,10 @@ def test_postgres_reader_classifies_reconciliation_and_poison_outbox_as_critical
     assert snapshot.network.timeouts == 1
     assert snapshot.network.late_responses == 1
     assert snapshot.network.p95_latency_ms == 1800.0
+    assert snapshot.network.routes is not None
+    assert snapshot.network.routes[0].route_name == "issuer-a"
+    assert snapshot.network.routes[0].issuer_id == "issuer-bank-a"
+    assert snapshot.network.routes[0].delivery_unknown == 1
     assert snapshot.missing_sections == []
     assert len(snapshot.incidents) == 2
 

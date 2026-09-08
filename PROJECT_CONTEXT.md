@@ -1,6 +1,6 @@
 # Portfolio engineering context
 
-Last verified: 2026-09-03
+Last verified: 2026-09-08
 Canonical portfolio: Payments & Distributed Systems, Applied AI/ML, and Full-Stack Product Engineering.
 
 ## Repository roles
@@ -13,11 +13,11 @@ Canonical portfolio: Payments & Distributed Systems, Applied AI/ML, and Full-Sta
 
 ## Current verified state
 
-- AtlasPay main is at 741465a (Unify Java authorization with AtlasPay schema); its Python CI, Java service CI and Railway deployment checks are green.
-- AtlasPay production has separate Python and Java Railway services using the shared PostgreSQL schema. The hosted demo is deterministic and does not process real money or connect to a live card network.
-- Nexus main is at e227659 (Document verified AtlasPay cloud topology); GitHub CI and the Vercel production deployment are green. The live console reads the protected AtlasPay snapshot through the server-side bearer-token boundary.
-- The live demo intentionally exposes operational facts and failure states, not PAN, message payloads, STAN/RRN, DE55 or transaction identifiers.
+- AtlasPay default-branch CI and scheduled security checks are green. Production has separate Python and Java Railway services using the shared PostgreSQL schema; both deployments are healthy.
+- The v1 operator snapshot now exposes durable aggregate network totals plus route/issuer/acquirer breakdowns for accepted, timeout, late-response and delivery-unknown observations. It still excludes PAN, message payloads, STAN/RRN, DE55 and transaction identifiers.
+- Nexus default-branch CI and its Vercel production deployment are green. The live console reads the protected AtlasPay snapshot through the server-side bearer-token boundary.
 - AtlasRAG, ForecastLab and portfolio each have green latest default-branch CI as of this verification. The profile README is synchronized with the portfolio positioning.
+- The hosted demo is deterministic and does not process real money or connect to a live card network.
 
 ## Guarantees and failure boundaries
 
@@ -37,7 +37,7 @@ Canonical portfolio: Payments & Distributed Systems, Applied AI/ML, and Full-Sta
 
 ## Highest-value next tasks
 
-- Extend the operational contract with issuer/route breakdowns and durable transaction drill-down facts.
+- Add privacy-safe durable transaction drill-down facts with bounded retention and explicit correlation semantics.
 - Add controlled outbox replay/rebuild tooling with audit records and idempotent-consumer constraints.
 - Add a concrete, versioned EMV tag dictionary and broader TVR rule coverage.
 - Add AtlasRAG groundedness/recall evaluation metrics and ForecastLab pixel-level inference adapters only when their datasets and limitations are explicit.
