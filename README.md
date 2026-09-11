@@ -1,8 +1,31 @@
 # AtlasPay
 
-AtlasPay is a payment-processing reference system built around failure handling, accounting correctness and protocol boundaries. It uses FastAPI and PostgreSQL and includes ISO 8583/EMV adapters, payment routing, idempotency, a double-entry ledger, a transactional outbox, reconciliation and an operational API consumed by Nexus.
+### Payment systems engineering with Java, Spring Boot, Python and PostgreSQL
 
-It is a simulation: it does not connect to a live card network or process real money.
+AtlasPay explores a practical payments problem: keeping decisions, accounting and operational evidence consistent when requests are retried, networks time out and events need to be delivered again.
+
+It combines a **Java 21 / Spring Boot authorization service** with a **Python / FastAPI payment lifecycle API**. [Nexus](https://github.com/soufianeelbiki1/Nexus) is the companion Next.js operations console.
+
+[Java service](java-service/) · [Architecture decisions](docs/adr/) · [Integrated demo guide](https://github.com/soufianeelbiki1/Nexus/blob/main/docs/LOCAL_DEMO.md) · [CI](https://github.com/soufianeelbiki1/AtlasPay/actions)
+
+This is a reference implementation with simulated payment flows; it does not process real money or connect to a live card network.
+
+## Start here
+
+| If you want to inspect… | Start with… |
+| --- | --- |
+| Java / Spring Boot engineering | [Authorization and reconciliation service](java-service/) |
+| Persistence and delivery guarantees | [Architecture decisions](docs/adr/) |
+| A complete API + database + UI demonstration | [AtlasPay + Nexus local demo](https://github.com/soufianeelbiki1/Nexus/blob/main/docs/LOCAL_DEMO.md) |
+| Network failure handling | The protocol and network behaviour sections below |
+| Repeatable verification | [CI workflows](.github/workflows/) |
+
+## Engineering questions
+
+- **What happens on a retry?** Persist idempotency decisions and validate request fingerprints.
+- **Can accounting drift from payment state?** Commit lifecycle changes, ledger entries and outbox events within a transaction.
+- **Does a timeout mean failure?** Model ambiguous delivery and late responses explicitly.
+- **Can an operator trust the dashboard?** Expose durable operational facts through a protected snapshot consumed by Nexus.
 
 ## Java authorization boundary
 
@@ -42,6 +65,8 @@ Prometheus metrics and OpenTelemetry spans use low-cardinality labels and exclud
 
 ## Run locally
 
+Prerequisites: Python, PostgreSQL, and Java 21 with Maven for the Java service. Create the local `atlaspay` database and role before running migrations. For the containerised Python API + database + Nexus path, follow the [integrated demo guide](https://github.com/soufianeelbiki1/Nexus/blob/main/docs/LOCAL_DEMO.md); the Java service has its own run path below.
+
 ```bash
 git clone https://github.com/soufianeelbiki1/AtlasPay.git
 cd AtlasPay
@@ -51,6 +76,11 @@ pip install -e ".[dev]"
 export DATABASE_URL=postgresql://atlaspay:atlaspay@localhost:5432/atlaspay
 python -m app.migrations
 uvicorn app.main:app --reload
+```
+
+With PostgreSQL running, start the Java service in a separate terminal from the repository root:
+
+```bash
 mvn -f java-service/pom.xml spring-boot:run
 ```
 
