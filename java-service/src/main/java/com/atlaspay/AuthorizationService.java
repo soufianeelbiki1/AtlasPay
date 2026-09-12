@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -25,34 +26,20 @@ class AuthorizationService {
     this.objectMapper = objectMapper;
   }
 
-  @Transactional
+  @Transactional(isolation = Isolation.READ_COMMITTED)
   public AuthorizationController.AuthorizationResponse authorize(
       String key, AuthorizationController.AuthorizationRequest request) {
-    var existing = jdbc.query(
-        "select decision_id,payment_id,status,reason,issuer_id,amount_minor,currency from authorization_decisions where idempotency_key=?",
-        ps -> ps.setString(1, key),
-        (rs, n) -> new StoredDecision(new AuthorizationController.AuthorizationResponse(
-            UUID.fromString(rs.getString(1)),
-            rs.getString(2),
-            rs.getString(3),
-            rs.getString(4)), new AuthorizationController.AuthorizationRequest(
-                rs.getString(2), rs.getString(5), rs.getLong(6), rs.getString(7))));
-
+    var existing = findDecision(key);
     if (!existing.isEmpty()) {
-      var decision = existing.getFirst();
-      if (!decision.request().equals(request)) {
-        throw new ResponseStatusException(
-            HttpStatus.CONFLICT, "Idempotency key was already used for a different authorization request");
-      }
-      return decision.response();
+      return replay(existing.getFirst(), request);
     }
 
     String status = request.amountMinor() > 1_000_000 ? "declined" : "approved";
     String reason = status.equals("approved") ? "issuer_approved" : "amount_limit";
     UUID decisionId = UUID.randomUUID();
 
-    jdbc.update(
-        "insert into authorization_decisions(decision_id,idempotency_key,payment_id,issuer_id,amount_minor,currency,status,reason) values (?,?,?,?,?,?,?,?)",
+    int inserted = jdbc.update(
+        "insert into authorization_decisions(decision_id,idempotency_key,payment_id,issuer_id,amount_minor,currency,status,reason) values (?,?,?,?,?,?,?,?) on conflict (idempotency_key) do nothing",
         decisionId,
         key,
         request.paymentId(),
@@ -61,6 +48,12 @@ class AuthorizationService {
         request.currency(),
         status,
         reason);
+
+    if (inserted == 0) {
+      // PostgreSQL waits for the competing insert. Under READ COMMITTED the
+      // following statement sees the committed winner without aborting our tx.
+      return replay(findDecision(key).getFirst(), request);
+    }
 
     jdbc.update(
         "insert into outbox_events(id,aggregate_type,aggregate_id,event_type,payload) values (?,?,?,?,?::jsonb)",
@@ -72,6 +65,25 @@ class AuthorizationService {
 
     return new AuthorizationController.AuthorizationResponse(
         decisionId, request.paymentId(), status, reason);
+  }
+
+  private java.util.List<StoredDecision> findDecision(String key) {
+    return jdbc.query(
+        "select decision_id,payment_id,status,reason,issuer_id,amount_minor,currency from authorization_decisions where idempotency_key=?",
+        ps -> ps.setString(1, key),
+        (rs, n) -> new StoredDecision(new AuthorizationController.AuthorizationResponse(
+            UUID.fromString(rs.getString(1)), rs.getString(2), rs.getString(3), rs.getString(4)),
+            new AuthorizationController.AuthorizationRequest(
+                rs.getString(2), rs.getString(5), rs.getLong(6), rs.getString(7))));
+  }
+
+  private AuthorizationController.AuthorizationResponse replay(
+      StoredDecision decision, AuthorizationController.AuthorizationRequest request) {
+    if (!decision.request().equals(request)) {
+      throw new ResponseStatusException(
+          HttpStatus.CONFLICT, "Idempotency key was already used for a different authorization request");
+    }
+    return decision.response();
   }
 
   private String authorizationPayload(String status) {

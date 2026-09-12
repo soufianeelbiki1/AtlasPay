@@ -12,10 +12,20 @@ units, or currency returns HTTP 409. Clients must not reinterpret the original
 decision as authorization for the changed request.
 
 `AuthorizationServiceTest` checks identical replay and conflicts for each of
-these four fields, including the absence of writes. These are mocked service
-tests, not proof of concurrent database behavior. Concurrent first requests
-still rely on the database unique constraint; a transactional concurrency
-integration test and graceful handling of that race remain follow-up work.
+these four fields, including the absence of writes. PostgreSQL arbitrates
+simultaneous first requests using the unique idempotency key and
+`INSERT ... ON CONFLICT DO NOTHING`. The losing transaction rereads the
+committed decision under explicit READ COMMITTED isolation and applies the same
+request comparison; it never emits another event.
+
+`AuthorizationPostgresTest` uses a disposable local PostgreSQL 16 Testcontainer
+and the real Spring transaction proxy. A test-only barrier forces both first
+reads to observe no existing decision. The tests assert one decision and one
+event for identical concurrent requests, one success and one conflict for
+changed concurrent requests, and transaction rollback when outbox insertion
+fails. Run `mvn -B test` with Java 21 and Docker. No hosted database or API
+credentials are used. This covers the authorization boundary, not a claim of
+whole-system exactly-once delivery or a production benchmark.
 The payment flows are simulations and do not move real money.
 
 ## Reconciliation batch

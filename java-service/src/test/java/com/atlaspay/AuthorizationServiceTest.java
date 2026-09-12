@@ -50,6 +50,8 @@ class AuthorizationServiceTest {
   @Test
   void amount_over_limit_is_declined_and_emits_shared_outbox_event() {
     JdbcTemplate jdbc = mock(JdbcTemplate.class);
+    when(jdbc.update(contains("insert into authorization_decisions"), any(Object[].class)))
+        .thenReturn(1);
     when(jdbc.query(anyString(), any(PreparedStatementSetter.class), any(RowMapper.class)))
         .thenReturn(java.util.List.of());
 
