@@ -15,7 +15,15 @@ AuthorizationControllerTest exercises real Spring MVC validation and the interna
 authentication filter with a mocked service. It checks valid delegation,
 missing/null/malformed currency, blank/null/oversized identifiers, nonpositive
 amounts, missing/blank/oversized keys and authentication. This is HTTP-layer
-testing, not proof of database transactions; replay/concurrency work is separate.
+testing, not proof of database transactions by itself.
+
+The combined AuthorizationHttpPostgresTest boots the real HTTP server and a
+disposable PostgreSQL 16 container. Invalid currency/identifiers and oversized
+keys return 400 with zero decisions/events. A corrected request may reuse the
+rejected request's key. Validation still runs for invalid retries after a valid
+decision exists: identical valid retries return the original response, changed
+valid requests return 409, and both preserve one decision and one event. A
+boundary case verifies 128-character keys/identifiers persist without truncation.
 
 Run the MVC tests with Java 21 and Maven:
 
@@ -25,3 +33,12 @@ mvn -B -f java-service/pom.xml -Dtest=AuthorizationControllerTest test
 
 No hosted account, external API or database credentials are needed for these MVC
 tests. Production publishing still requires verified zero-cost eligibility.
+
+For the combined HTTP/database and concurrency tests, Docker is also required:
+
+```bash
+mvn -B -f java-service/pom.xml -Dtest=AuthorizationControllerTest,AuthorizationHttpPostgresTest,AuthorizationPostgresTest test
+```
+
+See [the local walkthrough](LOCAL_WALKTHROUGH.md) for the complete simulated
+authorization flow and its limits. These suites do not use hosted services.
