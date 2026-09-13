@@ -23,6 +23,9 @@ disposable PostgreSQL 16 container. It verifies responses **and database state**
 | Changed amount with the same key | 409; original amount and ID retained | Still 1 / 1 |
 | Missing bearer credentials | 401 | 0 / 0 |
 | Zero amount with valid credentials | 400 | 0 / 0 |
+| Invalid currency/identifiers, then corrected input with the same key | 400, then 200 | 0 / 0, then 1 / 1 |
+| Invalid retry after a valid decision | 400 | Still 1 / 1 |
+| 129-character key / valid 128-character boundary | 400 / 200 | 0 / 0 or 1 / 1 |
 | Amount above the simulated limit | 200 with `declined` / `amount_limit` | 1 / 1 |
 
 The separate transaction suite forces overlapping first reads, verifies identical
@@ -99,6 +102,6 @@ docker stop atlaspay-java-walkthrough
 ```
 
 This does not establish whole-system exactly-once delivery, production latency,
-scale, or hosted-demo availability. The independent HTTP-validation PR adds
-further identifier/currency boundary cases; do not attribute its coverage to
-this walkthrough until those changes are integrated and reverified.
+scale, or hosted-demo availability. The combined [HTTP contract](HTTP_CONTRACT.md)
+documents validation and replay ordering, with both MVC tests and database-state
+assertions. All flows remain simulations, not a payment provider integration.

@@ -1,10 +1,13 @@
 package com.atlaspay;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import java.util.HashMap;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.client.TestRestTemplate;
@@ -50,11 +53,15 @@ class AuthorizationHttpPostgresTest {
   }
 
   private ResponseEntity<JsonNode> authorize(String key, long amount, boolean authenticated) {
+    return authorize(key, Map.of("paymentId", "pay-local-1", "issuerId", "issuer-local-1",
+        "amountMinor", amount, "currency", "EUR"), authenticated);
+  }
+
+  private ResponseEntity<JsonNode> authorize(
+      String key, Map<String, Object> request, boolean authenticated) {
     var headers = new HttpHeaders();
     headers.set("Idempotency-Key", key);
     if (authenticated) headers.setBearerAuth(TOKEN);
-    var request = Map.of("paymentId", "pay-local-1", "issuerId", "issuer-local-1",
-        "amountMinor", amount, "currency", "EUR");
     return http.exchange("/v1/authorizations", HttpMethod.POST,
         new HttpEntity<>(request, headers), JsonNode.class);
   }
@@ -93,6 +100,70 @@ class AuthorizationHttpPostgresTest {
   void invalid_http_amount_never_writes_a_decision_or_event() {
     assertEquals(400, authorize("http-invalid", 0, true).getStatusCode().value());
     assertCounts(0, 0);
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"missing-currency", "null-currency", "lowercase-currency",
+      "blank-payment", "long-payment", "long-issuer"})
+  void invalid_requests_neither_consume_a_key_nor_bypass_validation_on_replay(String variant) {
+    var invalid = new HashMap<String, Object>(Map.of("paymentId", "pay-local-1",
+        "issuerId", "issuer-local-1", "amountMinor", 1234, "currency", "EUR"));
+    switch (variant) {
+      case "missing-currency" -> invalid.remove("currency");
+      case "null-currency" -> invalid.put("currency", null);
+      case "lowercase-currency" -> invalid.put("currency", "eur");
+      case "blank-payment" -> invalid.put("paymentId", "  ");
+      case "long-payment" -> invalid.put("paymentId", "p".repeat(129));
+      case "long-issuer" -> invalid.put("issuerId", "i".repeat(129));
+      default -> throw new IllegalArgumentException(variant);
+    }
+
+    String key = "correctable-request";
+    assertEquals(400, authorize(key, invalid, true).getStatusCode().value());
+    assertCounts(0, 0);
+
+    // A rejected request must not reserve the key. A corrected request can use it.
+    var corrected = authorize(key, 1234, true);
+    assertEquals(200, corrected.getStatusCode().value());
+    assertNotNull(corrected.getBody());
+    assertCounts(1, 1);
+
+    // Validation must run even when a decision already exists for the key.
+    assertEquals(400, authorize(key, invalid, true).getStatusCode().value());
+    var replay = authorize(key, 1234, true);
+    assertEquals(200, replay.getStatusCode().value());
+    assertEquals(corrected.getBody(), replay.getBody());
+    assertEquals(409, authorize(key, 1235, true).getStatusCode().value());
+    assertCounts(1, 1);
+    assertEquals(1234L, jdbc.queryForObject(
+        "select amount_minor from authorization_decisions where idempotency_key=?",
+        Long.class, key));
+    assertEquals("EUR", jdbc.queryForObject(
+        "select currency from authorization_decisions where idempotency_key=?", String.class, key));
+  }
+
+  @Test
+  void oversized_http_key_is_rejected_without_database_writes() {
+    assertEquals(400, authorize("k".repeat(129), 1234, true).getStatusCode().value());
+    assertCounts(0, 0);
+  }
+
+  @Test
+  void maximum_length_identifiers_are_persisted_exactly_and_replay_safely() {
+    String key = "k".repeat(128);
+    var request = Map.<String, Object>of("paymentId", "p".repeat(128),
+        "issuerId", "i".repeat(128), "amountMinor", 1234, "currency", "EUR");
+    var first = authorize(key, request, true);
+    var replay = authorize(key, request, true);
+    assertEquals(200, first.getStatusCode().value());
+    assertEquals(200, replay.getStatusCode().value());
+    assertNotNull(first.getBody());
+    assertEquals(first.getBody(), replay.getBody());
+    assertCounts(1, 1);
+    assertEquals(request.get("paymentId"), jdbc.queryForObject(
+        "select payment_id from authorization_decisions where idempotency_key=?", String.class, key));
+    assertEquals(request.get("issuerId"), jdbc.queryForObject(
+        "select issuer_id from authorization_decisions where idempotency_key=?", String.class, key));
   }
 
   @Test
