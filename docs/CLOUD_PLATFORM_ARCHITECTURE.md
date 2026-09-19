@@ -50,6 +50,38 @@ Required production variables:
 
 Railway supplies PORT; the application maps it to its HTTP server port.
 
+## Deployment trigger boundaries
+
+The two Railway services share this repository but build different artifacts. Production watch
+paths therefore follow the files consumed by each image instead of rebuilding both services for
+every documentation, test or analytics change.
+
+The Java service watches:
+
+- `/java-service/Dockerfile`;
+- `/java-service/pom.xml`;
+- `/java-service/railway.toml`;
+- `/java-service/src/main/**`.
+
+The Python API watches:
+
+- `/.dockerignore`;
+- `/Dockerfile`;
+- `/app/**`;
+- `/migrations/**`;
+- `/pyproject.toml`;
+- `/railway.toml`.
+
+These allowlists deliberately exclude tests and documentation because those changes do not alter
+either runtime image. Migration changes remain a Python API trigger because its controlled demo
+bootstrap owns the repository migration runner. Railway evaluates watch paths from the repository
+root, including when a service has its own root directory.
+
+Changing watch paths does not restart a running service. Verify the saved configuration and confirm
+that no new deployment was created before treating the change as complete. These paths reduce
+unnecessary trial consumption; they do not replace a CI deployment gate. Both live services still
+track `main` without waiting for GitHub check suites, which remains a release risk.
+
 ### Reconciliation
 
 Reconciliation is a restartable batch capability, not an HTTP request that silently mutates state. The deployment should use a scheduled Railway job or a protected internal trigger. Every run must expose an execution ID, status, processed count and mismatch count.
